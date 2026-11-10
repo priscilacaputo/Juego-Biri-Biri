@@ -838,7 +838,7 @@ function timerRender() {
   document.getElementById('timerBar').style.strokeDashoffset = RING * (1 - tmr.left / DEBATE_MS);
   const main = document.getElementById('timerMain');
   main.textContent = done ? '↺ Otra vez' : tmr.running ? '⏸ Pausa' : (tmr.left < DEBATE_MS ? '▶ Seguir' : '▶ Empezar debate');
-  document.getElementById('timerHint').textContent = done ? 'Se acabó. ¿Alguien logró convencer al otro?' : tmr.running ? 'Hablen por turnos. ¡Argumenten!' : 'Toquen cuando estén listos.';
+  document.getElementById('timerHint').textContent = done ? 'Se acabó. ¿Alguien logró convencer al otro?' : tmr.running ? 'Hablen por turnos. ¡Argumenten!' : tmr.left === DEBATE_MS ? 'Arranca en un instante…' : 'En pausa. Toquen para seguir.';
 }
 
 function timerTick() {
@@ -867,6 +867,20 @@ function timerApply(running, left) {
   tmr.left = left; tmr.running = running; tmr.lastSec = null;
   if (running) { sfx.start(); tmr.endAt = Date.now() + left; tmr.id = setInterval(timerTick, 200); }
   timerRender();
+}
+
+// Arranca solo al mostrarse el "¡A debatir!". No se sincroniza por red:
+// los dos celulares revelan a la vez y cada uno lo arranca por su cuenta.
+function timerAuto() {
+  const q = cur;
+  setTimeout(() => {
+    if (q !== cur || tmr.running || tmr.left !== DEBATE_MS || !document.getElementById('timer')) return;
+    sfx.start();
+    tmr.endAt = Date.now() + tmr.left;
+    tmr.running = true;
+    tmr.id = setInterval(timerTick, 200);
+    timerRender();
+  }, 1200);
 }
 
 function timerToggle() {
@@ -1096,7 +1110,7 @@ function revealVotes() {
     </div>`;
 
   document.getElementById('btnNext').hidden = false;
-  if (!agree) timerRender();
+  if (!agree) { timerRender(); timerAuto(); }
   agree ? sfx.agree() : sfx.debate();
   burst(agree ? ['🎉','✨','💚','🤝','⭐'] : ['⚡','🔥','💥','⚔️','🗯️'], agree ? 26 : 18);
 
