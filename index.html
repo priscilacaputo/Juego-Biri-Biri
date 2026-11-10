@@ -388,7 +388,7 @@ body::after {
 .anim-slide { animation: slide-up .4s cubic-bezier(.2,.8,.2,1) both }
 
 @media (prefers-reduced-motion: reduce) {
-  .aurora i, .btn-reveal, .result-icon, .end-trophy, .result-card { animation: none !important }
+  .aurora i, .btn-reveal, .result-icon, .end-trophy, .result-card, .timer-ring { animation: none !important }
   .anim-pop, .anim-slide { animation: none }
   .fx { display: none }
   * { transition-duration: 0ms !important }
@@ -398,6 +398,60 @@ body::after {
   .vote-grid { gap: 8px }
   .btn-vote { font-size: .82rem; padding: 12px 4px }
 }
+
+/* ── Mute button ── */
+.btn-mute {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--glass);
+  color: var(--fg); font-size: .95rem; line-height: 1; cursor: pointer;
+  display: grid; place-items: center; flex-shrink: 0;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: transform .15s, background .15s;
+}
+.btn-mute:hover { background: var(--glass-hi); transform: scale(1.08) }
+.btn-mute:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px }
+.btn-mute.off { opacity: .55 }
+
+/* ── Debate timer ── */
+.timer {
+  position: relative; width: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  margin-top: 6px; padding-top: 18px;
+  border-top: 1px dashed rgba(255,255,255,.14);
+}
+.timer-ring { position: relative; width: 132px; height: 132px }
+.timer-ring svg { width: 100%; height: 100%; transform: rotate(-90deg) }
+.timer-ring circle { fill: none; stroke-width: 7; stroke-linecap: round }
+.timer-ring .trk { stroke: rgba(255,255,255,.1) }
+.timer-ring .bar {
+  stroke: var(--c);
+  stroke-dasharray: 326.7; stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 6px var(--c));
+  transition: stroke-dashoffset .25s linear, stroke .3s;
+}
+.timer-time {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--display); font-weight: 800; font-size: 2rem;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.timer.warn .bar { stroke: var(--gold) }
+.timer.warn .timer-time { color: var(--gold) }
+.timer.warn .timer-ring { animation: tpulse 1s ease-in-out infinite }
+.timer.done .bar { stroke: var(--p2) }
+.timer.done .timer-time { color: var(--p2); font-size: 1.15rem; text-shadow: 0 0 20px var(--p2) }
+@keyframes tpulse { 50% { transform: scale(1.06) } }
+.timer-btns { display: flex; gap: 8px }
+.btn-timer {
+  padding: 11px 20px; border-radius: 100px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--glass-hi); color: var(--fg);
+  font-family: inherit; font-weight: 700; font-size: .85rem;
+  transition: transform .15s, background .15s, color .15s;
+}
+.btn-timer.main { background: var(--gold); color: #0b0914; border-color: var(--gold) }
+.btn-timer:hover { transform: translateY(-2px) }
+.btn-timer:active { transform: scale(.96) }
+.btn-timer:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px }
+.timer-hint { font-size: .75rem; color: var(--fg-muted) }
 
 [hidden] { display: none !important }
 </style>
@@ -416,6 +470,7 @@ body::after {
       <span class="stat stat-agree"  id="statAgree">🤝 0</span>
       <span class="stat-sep">·</span>
       <span class="stat stat-debate" id="statDebate">⚔️ 0</span>
+      <button class="btn-mute" id="btnMute" onclick="toggleSound()" aria-label="Sonido activado" title="Sonido">🔊</button>
     </div>
   </header>
 
@@ -530,6 +585,124 @@ const QUESTIONS = [
   { text: "¿La amistad entre hombres y mujeres siempre tiene un límite?", cat: "Amistad" },
 ];
 
+
+// ═══ SONIDO (sintetizado con WebAudio, sin archivos) ═══
+let soundOn = true;
+try { soundOn = localStorage.getItem('biri-sound') !== 'off'; } catch (e) {}
+let actx = null;
+
+function audio() {
+  if (!soundOn) return null;
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+
+function tone(freq, dur, { type = 'sine', vol = 0.15, at = 0, to = null } = {}) {
+  const c = audio(); if (!c) return;
+  const t = c.currentTime + at;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(c.destination);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+
+const sfx = {
+  vote(p)  { tone(p === 1 ? 660 : 520, 0.14, { type: 'triangle', vol: 0.18 }); tone(p === 1 ? 990 : 780, 0.18, { type: 'sine', vol: 0.08, at: 0.06 }); },
+  ready()  { tone(440, 0.12, { type: 'square', vol: 0.05 }); tone(660, 0.12, { type: 'square', vol: 0.05, at: 0.09 }); tone(880, 0.22, { type: 'square', vol: 0.06, at: 0.18 }); },
+  agree()  { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.28, { type: 'triangle', vol: 0.16, at: i * 0.08 })); tone(1568, 0.5, { type: 'sine', vol: 0.07, at: 0.34 }); },
+  debate() { tone(180, 0.35, { type: 'sawtooth', vol: 0.12, to: 70 }); tone(120, 0.45, { type: 'square', vol: 0.09, at: 0.05, to: 60 }); tone(740, 0.12, { type: 'sawtooth', vol: 0.05, at: 0.3 }); },
+  tick()   { tone(1200, 0.05, { type: 'square', vol: 0.06 }); },
+  alarm()  { [0, 0.28, 0.56].forEach(a => { tone(880, 0.2, { type: 'square', vol: 0.12, at: a }); tone(1320, 0.2, { type: 'sine', vol: 0.08, at: a }); }); },
+  next()   { tone(600, 0.07, { type: 'sine', vol: 0.1 }); },
+  start()  { tone(500, 0.1, { type: 'triangle', vol: 0.12 }); tone(750, 0.16, { type: 'triangle', vol: 0.12, at: 0.08 }); },
+  end()    { [523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.15, at: i * 0.13 })); tone(1047, 0.9, { type: 'sine', vol: 0.1, at: 0.8 }); }
+};
+
+function syncMute() {
+  const b = document.getElementById('btnMute');
+  b.textContent = soundOn ? '🔊' : '🔇';
+  b.classList.toggle('off', !soundOn);
+  b.setAttribute('aria-label', soundOn ? 'Sonido activado' : 'Sonido desactivado');
+}
+function toggleSound() {
+  soundOn = !soundOn;
+  try { localStorage.setItem('biri-sound', soundOn ? 'on' : 'off'); } catch (e) {}
+  syncMute();
+  if (soundOn) sfx.next();
+}
+
+// ═══ TIMER DE DEBATE ═══
+const DEBATE_MS = 120000;
+const RING = 326.7;
+let tmr = { id: null, endAt: 0, left: DEBATE_MS, running: false, lastSec: null };
+
+function timerStop() {
+  clearInterval(tmr.id);
+  tmr = { id: null, endAt: 0, left: DEBATE_MS, running: false, lastSec: null };
+}
+
+function fmt(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function timerRender() {
+  const box = document.getElementById('timer');
+  if (!box) return;
+  const done = tmr.left <= 0;
+  box.classList.toggle('warn', !done && tmr.left <= 10000 && (tmr.running || tmr.left < DEBATE_MS));
+  box.classList.toggle('done', done);
+  document.getElementById('timerTime').textContent = done ? '¡Tiempo!' : fmt(tmr.left);
+  document.getElementById('timerBar').style.strokeDashoffset = RING * (1 - tmr.left / DEBATE_MS);
+  const main = document.getElementById('timerMain');
+  main.textContent = done ? '↺ Otra vez' : tmr.running ? '⏸ Pausa' : (tmr.left < DEBATE_MS ? '▶ Seguir' : '▶ Empezar debate');
+  document.getElementById('timerHint').textContent = done ? 'Se acabó. ¿Alguien logró convencer al otro?' : tmr.running ? 'Hablen por turnos. ¡Argumenten!' : 'Toquen cuando estén listos.';
+}
+
+function timerTick() {
+  tmr.left = tmr.endAt - Date.now();
+  const sec = Math.ceil(tmr.left / 1000);
+  if (tmr.left <= 0) {
+    tmr.left = 0; tmr.running = false;
+    clearInterval(tmr.id); tmr.id = null;
+    sfx.alarm();
+    burst(['⏰', '🔔', '💬'], 10);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  } else if (sec !== tmr.lastSec) {
+    tmr.lastSec = sec;
+    if (sec <= 10) sfx.tick();
+  }
+  timerRender();
+}
+
+function timerToggle() {
+  if (tmr.left <= 0) tmr.left = DEBATE_MS;           // reiniciar tras terminar
+  if (tmr.running) {                                   // pausar
+    clearInterval(tmr.id); tmr.id = null;
+    tmr.running = false;
+  } else {                                             // empezar / seguir
+    sfx.start();
+    tmr.endAt = Date.now() + tmr.left;
+    tmr.running = true;
+    tmr.id = setInterval(timerTick, 200);
+  }
+  timerRender();
+}
+
+function timerReset() {
+  clearInterval(tmr.id);
+  tmr = { id: null, endAt: 0, left: DEBATE_MS, running: false, lastSec: null };
+  timerRender();
+}
+
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -547,6 +720,8 @@ let score = { agree: 0, debate: 0 };
 let revealed = false;
 
 function init() {
+  timerStop();
+  syncMute();
   deck = shuffle(QUESTIONS).slice(0, TOTAL);
   cur = 0;
   votes = { 1: null, 2: null };
@@ -567,6 +742,8 @@ function renderQuestion() {
   document.getElementById('qIndex').textContent = `PREGUNTA ${cur + 1} / ${TOTAL}`;
   document.getElementById('qText').textContent  = q.text;
   document.getElementById('qTag').textContent   = q.cat;
+
+  timerStop();
 
   // Reset vote state
   votes = { 1: null, 2: null };
@@ -600,6 +777,7 @@ function renderQuestion() {
 function castVote(player, choice) {
   if (votes[player] !== null || revealed) return;
   votes[player] = choice;
+  sfx.vote(player);
 
   const panel  = document.getElementById('panel' + player);
   const btnsEl = document.getElementById('btns' + player);
@@ -616,6 +794,7 @@ function castVote(player, choice) {
     document.getElementById('status1').textContent = '¡Listos!';
     document.getElementById('status2').textContent = '¡Listos!';
     document.getElementById('btnReveal').disabled = false;
+    setTimeout(sfx.ready, 250);
   }
 }
 
@@ -652,9 +831,23 @@ function revealVotes() {
         <span class="vote-chip chip-p2">J2: ${choiceLabel(v2)}</span>
       </div>
       <div class="result-desc">${desc}</div>
+      ${agree ? '' : `
+      <div class="timer" id="timer">
+        <div class="timer-ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="bar" id="timerBar" cx="60" cy="60" r="52"/></svg>
+          <div class="timer-time" id="timerTime" role="timer" aria-live="off">2:00</div>
+        </div>
+        <div class="timer-btns">
+          <button class="btn-timer main" id="timerMain" onclick="timerToggle()">▶ Empezar debate</button>
+          <button class="btn-timer" onclick="timerReset()" aria-label="Reiniciar timer">↺</button>
+        </div>
+        <div class="timer-hint" id="timerHint"></div>
+      </div>`}
     </div>`;
 
   document.getElementById('btnNext').hidden = false;
+  if (!agree) timerRender();
+  agree ? sfx.agree() : sfx.debate();
   burst(agree ? ['🎉','✨','💚','🤝','⭐'] : ['⚡','🔥','💥','⚔️','🗯️'], agree ? 26 : 18);
 }
 
@@ -677,6 +870,8 @@ function burst(set, n) {
 }
 
 function nextQuestion() {
+  timerStop();
+  sfx.next();
   cur++;
   if (cur >= TOTAL) {
     showEnd();
@@ -700,6 +895,8 @@ function showEnd() {
       ? '¡Choque de ideas! Eso hace que la conversación nunca sea aburrida.'
       : 'Mitad acuerdos, mitad debates. Balance perfecto.';
 
+  timerStop();
+  sfx.end();
   burst(['🏆','🎉','✨','⭐','🎊'], 36);
   document.getElementById('endArea').innerHTML = `
     <div class="end-screen anim-pop">
