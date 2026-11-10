@@ -1,0 +1,1710 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>A Favor o En Contra</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #07060d;
+  --glass:     rgba(255,255,255,0.055);
+  --glass-hi:  rgba(255,255,255,0.09);
+  --border:    rgba(255,255,255,0.12);
+  --fg:        #F4F2FF;
+  --fg-muted:  #9a96bd;
+  --p1:        #3ef0cf;
+  --p1-dim:    rgba(62,240,207,0.14);
+  --p2:        #ff5f7e;
+  --p2-dim:    rgba(255,95,126,0.14);
+  --gold:      #ffd25e;
+  --violet:    #8b6bff;
+  --agree:     var(--p1);
+  --disagree:  var(--p2);
+  --display:   'Syne', system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+
+html { background: var(--bg) }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-block: 22px 40px;
+  padding-left:  max(16px, env(safe-area-inset-left,0px));
+  padding-right: max(16px, env(safe-area-inset-right,0px));
+  position: relative;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Aurora background ── */
+.aurora { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden }
+.aurora i {
+  position: absolute;
+  width: 70vmax; height: 70vmax;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: .5;
+  will-change: transform;
+}
+.aurora i:nth-child(1) { background: radial-gradient(circle, var(--p1), transparent 62%); left: -35vmax; top: -20vmax; animation: drift1 22s ease-in-out infinite alternate }
+.aurora i:nth-child(2) { background: radial-gradient(circle, var(--p2), transparent 62%); right: -38vmax; bottom: -25vmax; animation: drift2 26s ease-in-out infinite alternate }
+.aurora i:nth-child(3) { background: radial-gradient(circle, var(--violet), transparent 62%); left: 20vw; top: 30vh; opacity: .28; animation: drift3 30s ease-in-out infinite alternate }
+@keyframes drift1 { to { transform: translate(25vmax, 18vmax) scale(1.15) } }
+@keyframes drift2 { to { transform: translate(-22vmax, -16vmax) scale(1.1) } }
+@keyframes drift3 { to { transform: translate(-18vw, 14vh) scale(1.25) } }
+
+/* film grain */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  opacity: .07; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.wrap {
+  position: relative; z-index: 2;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ── Header ── */
+.header { display: flex; align-items: center; justify-content: space-between; gap: 8px }
+.header .logo { min-width: 0 }
+.logo {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(.7rem, 3.2vw, 1.3rem);
+  white-space: nowrap;
+  letter-spacing: -0.03em;
+  background: linear-gradient(100deg, var(--p1), var(--gold) 50%, var(--p2));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.logo span { color: var(--fg); -webkit-text-fill-color: var(--fg); font-weight: 700; opacity: .85 }
+
+.stats { flex-shrink: 0; display: flex; gap: 5px; align-items: center; font-variant-numeric: tabular-nums }
+.stat {
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em;
+  padding: 5px 9px; border-radius: 100px;
+  white-space: nowrap;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border);
+}
+.stat-agree  { background: var(--p1-dim); color: var(--p1) }
+.stat-debate { background: var(--p2-dim); color: var(--p2) }
+.stat-sep    { display: none }
+
+/* ── Progress ── */
+.progress { height: 4px; background: var(--glass); border-radius: 100px; overflow: hidden }
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--p1), var(--gold), var(--p2));
+  border-radius: 100px;
+  box-shadow: 0 0 14px rgba(255,210,94,.7);
+  transition: width .6s cubic-bezier(.4,0,.2,1);
+}
+
+/* ── Question card (gradient-border glass) ── */
+.q-card {
+  position: relative;
+  border-radius: 28px;
+  padding: 40px 26px 30px;
+  text-align: center;
+  overflow: hidden;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(160deg, rgba(20,17,38,.82), rgba(12,10,24,.78)) padding-box,
+    linear-gradient(135deg, var(--p1), var(--violet) 50%, var(--p2)) border-box;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 24px 60px -20px rgba(139,107,255,.45);
+}
+.q-card::before {
+  content: '?';
+  position: absolute; right: -10px; top: -46px;
+  font-family: var(--display); font-weight: 800;
+  font-size: 15rem; line-height: 1;
+  color: rgba(255,255,255,.04);
+  pointer-events: none;
+}
+.q-card::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 70% 45% at 50% -8%, rgba(255,210,94,.14), transparent);
+}
+.q-index {
+  position: relative;
+  font-size: 0.68rem; font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 18px;
+}
+.q-text {
+  position: relative;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: clamp(1.45rem, 6vw, 2.05rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.q-tag {
+  position: relative;
+  display: inline-block; margin-top: 20px;
+  font-size: 0.66rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--fg-muted);
+  background: var(--glass);
+  border: 1px solid var(--border);
+  padding: 5px 13px; border-radius: 100px;
+}
+
+/* ── Vote panels with VS badge ── */
+.vote-grid { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+.vote-grid::after {
+  content: 'VS';
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  z-index: 3;
+  width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: var(--display); font-weight: 800; font-size: .72rem; letter-spacing: .02em;
+  color: #0b0914;
+  background: linear-gradient(135deg, var(--gold), #fff3c4);
+  box-shadow: 0 0 0 5px rgba(7,6,13,.8), 0 0 24px rgba(255,210,94,.5);
+}
+
+.player-panel {
+  --c: var(--p1); --c-dim: var(--p1-dim);
+  position: relative;
+  background: var(--glass);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 20px 12px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  overflow: hidden;
+  transition: border-color .3s, box-shadow .3s, background .3s, transform .3s;
+}
+#panel2 { --c: var(--p2); --c-dim: var(--p2-dim) }
+.player-panel::before {
+  content: ''; position: absolute; left: 14%; right: 14%; top: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--c), transparent);
+  box-shadow: 0 0 18px 2px var(--c);
+}
+.player-panel::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 90% 60% at 50% 0%, var(--c-dim), transparent 70%);
+}
+.player-panel.ready-p1, .player-panel.ready-p2 {
+  border-color: var(--c);
+  background: var(--c-dim);
+  box-shadow: 0 0 36px -6px var(--c), inset 0 0 28px -12px var(--c);
+  transform: translateY(-2px);
+}
+
+.p-label {
+  position: relative; z-index: 1;
+  font-family: var(--display); font-weight: 800;
+  font-size: .8rem; letter-spacing: .14em; text-transform: uppercase;
+}
+.p-label-1 { color: var(--p1) }
+.p-label-2 { color: var(--p2) }
+
+.vote-btns { position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column; gap: 8px }
+
+.btn-vote {
+  width: 100%;
+  padding: 13px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--glass-hi);
+  color: var(--fg);
+  font-family: inherit; font-weight: 700; font-size: .9rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: transform .15s, background .15s, border-color .15s, box-shadow .15s, color .15s;
+  min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-vote:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px }
+.btn-vote:disabled { pointer-events: none; opacity: .5 }
+.btn-vote:active { transform: scale(.96) }
+.p1 .btn-vote:hover { background: var(--c, var(--p1)); background: var(--p1); color: #04120f; border-color: var(--p1); box-shadow: 0 6px 24px -4px var(--p1); transform: translateY(-2px) }
+.p2 .btn-vote:hover { background: var(--p2); color: #1a0309; border-color: var(--p2); box-shadow: 0 6px 24px -4px var(--p2); transform: translateY(-2px) }
+
+.voted-display {
+  width: 100%; text-align: center;
+  padding: 22px 8px; border-radius: 14px;
+  font-weight: 700; font-size: .85rem;
+  border: 1px dashed var(--c);
+  color: var(--c);
+  background: rgba(0,0,0,.2);
+  animation: seal .45s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes seal { from { transform: scale(.7) rotate(-4deg); opacity: 0 } to { transform: none; opacity: 1 } }
+
+.p-status { position: relative; z-index: 1; font-size: .74rem; color: var(--fg-muted); min-height: 16px }
+
+/* ── Reveal button ── */
+.reveal-wrap { text-align: center }
+.btn-reveal {
+  padding: 17px 50px;
+  color: #0b0914;
+  font-family: var(--display); font-weight: 800; font-size: 1.05rem; letter-spacing: .01em;
+  border: none; border-radius: 100px; cursor: pointer;
+  background: linear-gradient(110deg, var(--p1), var(--gold), var(--p2), var(--gold), var(--p1));
+  background-size: 300% 100%;
+  box-shadow: 0 10px 40px -8px rgba(255,210,94,.55);
+  transition: transform .15s, opacity .25s, filter .25s;
+}
+.btn-reveal:not(:disabled) { animation: shimmer 3.5s linear infinite, beat 1.6s ease-in-out infinite }
+.btn-reveal:hover:not(:disabled) { transform: translateY(-3px) scale(1.03) }
+.btn-reveal:active:not(:disabled) { transform: scale(.97) }
+.btn-reveal:disabled { opacity: .22; cursor: not-allowed; filter: grayscale(.6) }
+.btn-reveal:focus-visible { outline: 2px solid var(--fg); outline-offset: 4px }
+@keyframes shimmer { to { background-position: -300% 0 } }
+@keyframes beat { 50% { box-shadow: 0 10px 56px -4px rgba(255,210,94,.85) } }
+
+/* ── Result card ── */
+.result-card {
+  --c: var(--agree);
+  position: relative; overflow: hidden;
+  border-radius: 28px;
+  padding: 36px 22px 30px;
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  background: rgba(14,12,26,.75);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1.5px solid var(--c);
+  box-shadow: 0 0 60px -10px var(--c), inset 0 0 50px -20px var(--c);
+}
+.result-card.disagree-card { --c: var(--disagree); animation: pop .35s cubic-bezier(.34,1.56,.64,1) both, shake .5s .3s ease-in-out }
+.result-card::before {
+  content: ''; position: absolute; inset: -40% -20% auto; height: 80%;
+  background: radial-gradient(ellipse at center, var(--c), transparent 65%);
+  opacity: .22; pointer-events: none;
+}
+.result-icon { position: relative; font-size: 3.6rem; line-height: 1; filter: drop-shadow(0 6px 22px var(--c)); animation: bob 2.4s ease-in-out infinite }
+@keyframes bob { 50% { transform: translateY(-6px) rotate(-4deg) } }
+@keyframes shake { 0%,100% { transform: translateX(0) } 20% { transform: translateX(-7px) } 40% { transform: translateX(6px) } 60% { transform: translateX(-4px) } 80% { transform: translateX(3px) } }
+
+.result-verdict {
+  position: relative;
+  font-family: var(--display); font-weight: 800;
+  font-size: 2rem; letter-spacing: -0.03em; line-height: 1;
+  color: var(--c);
+  text-shadow: 0 0 28px var(--c);
+}
+
+.votes-row { position: relative; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap }
+.vote-chip { padding: 8px 16px; border-radius: 100px; font-weight: 700; font-size: .85rem; border: 1px solid currentColor }
+.chip-p1 { background: var(--p1-dim); color: var(--p1) }
+.chip-p2 { background: var(--p2-dim); color: var(--p2) }
+
+.result-desc { position: relative; font-size: .92rem; color: var(--fg-muted); line-height: 1.6; max-width: 320px }
+
+/* ── Next button ── */
+.btn-next {
+  width: 100%; padding: 17px;
+  background: var(--glass-hi);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  color: var(--fg);
+  font-family: var(--display); font-weight: 800; font-size: 1rem; letter-spacing: .01em;
+  cursor: pointer;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: background .2s, border-color .2s, transform .15s, box-shadow .2s;
+}
+.btn-next:hover { background: var(--gold); color: #0b0914; border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 10px 34px -8px var(--gold) }
+.btn-next:active { transform: scale(.98) }
+.btn-next:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px }
+
+/* ── End screen ── */
+.end-screen {
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 20px;
+  padding: 34px 20px 30px;
+  border-radius: 28px;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(160deg, rgba(20,17,38,.85), rgba(12,10,24,.8)) padding-box,
+    linear-gradient(135deg, var(--p1), var(--gold) 50%, var(--p2)) border-box;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 30px 80px -24px rgba(255,210,94,.4);
+}
+.end-trophy { font-size: 4rem; line-height: 1; filter: drop-shadow(0 8px 28px rgba(255,210,94,.7)); animation: bob 2.4s ease-in-out infinite }
+.end-title {
+  font-family: var(--display); font-weight: 800; font-size: 2.1rem; letter-spacing: -0.03em; text-wrap: balance;
+  background: linear-gradient(100deg, var(--p1), var(--gold), var(--p2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.end-subtitle { color: var(--fg-muted); font-size: .92rem }
+
+.end-stats { display: flex; gap: 12px; width: 100%; max-width: 340px }
+.end-stat { flex: 1; background: var(--glass); border: 1px solid var(--border); border-radius: 20px; padding: 20px 12px }
+.end-num { font-family: var(--display); font-weight: 800; font-size: 3rem; line-height: 1; font-variant-numeric: tabular-nums }
+.num-agree    { color: var(--agree);    text-shadow: 0 0 26px var(--agree) }
+.num-disagree { color: var(--disagree); text-shadow: 0 0 26px var(--disagree) }
+.end-stat-lbl { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-muted); margin-top: 8px }
+
+.end-msg { font-size: .95rem; color: var(--fg-muted); line-height: 1.65; max-width: 300px }
+
+.btn-restart {
+  padding: 16px 44px;
+  background: linear-gradient(110deg, var(--p1), var(--gold), var(--p2));
+  color: #0b0914;
+  font-family: var(--display); font-weight: 800; font-size: 1rem;
+  border: none; border-radius: 100px; cursor: pointer;
+  box-shadow: 0 10px 36px -8px rgba(255,210,94,.6);
+  transition: transform .15s;
+}
+.btn-restart:hover { transform: translateY(-2px) scale(1.04) }
+.btn-restart:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px }
+
+/* ── Confetti / burst ── */
+.fx { position: fixed; inset: 0; z-index: 50; pointer-events: none; overflow: hidden }
+.fx span {
+  position: absolute; left: 50%; top: 55%;
+  font-size: var(--s, 1.4rem);
+  animation: burst var(--t, 1.1s) cubic-bezier(.15,.8,.3,1) forwards;
+}
+@keyframes burst {
+  0%   { transform: translate(-50%,-50%) scale(.3) rotate(0); opacity: 1 }
+  100% { transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1) rotate(var(--r)); opacity: 0 }
+}
+
+/* ── Animations ── */
+@keyframes pop { from { transform: scale(.8); opacity: 0 } to { transform: scale(1); opacity: 1 } }
+@keyframes slide-up { from { transform: translateY(18px) scale(.98); opacity: 0 } to { transform: none; opacity: 1 } }
+.anim-pop   { animation: pop .35s cubic-bezier(.34,1.56,.64,1) both }
+.anim-slide { animation: slide-up .4s cubic-bezier(.2,.8,.2,1) both }
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora i, .btn-reveal, .result-icon, .end-trophy, .result-card, .timer-ring { animation: none !important }
+  .anim-pop, .anim-slide { animation: none }
+  .fx { display: none }
+  * { transition-duration: 0ms !important }
+}
+
+@media (max-width: 380px) {
+  .vote-grid { gap: 8px }
+  .btn-vote { font-size: .82rem; padding: 12px 4px }
+}
+
+/* ── Mute button ── */
+.btn-mute {
+  width: 31px; height: 31px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--glass);
+  color: var(--fg); font-size: .95rem; line-height: 1; cursor: pointer;
+  display: grid; place-items: center; flex-shrink: 0;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: transform .15s, background .15s;
+}
+.btn-mute:hover { background: var(--glass-hi); transform: scale(1.08) }
+.btn-mute:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px }
+.btn-mute.off { opacity: .55 }
+
+/* ── Debate timer ── */
+.timer {
+  position: relative; width: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  margin-top: 6px; padding-top: 18px;
+  border-top: 1px dashed rgba(255,255,255,.14);
+}
+.timer-ring { position: relative; width: 132px; height: 132px }
+.timer-ring svg { width: 100%; height: 100%; transform: rotate(-90deg) }
+.timer-ring circle { fill: none; stroke-width: 7; stroke-linecap: round }
+.timer-ring .trk { stroke: rgba(255,255,255,.1) }
+.timer-ring .bar {
+  stroke: var(--c);
+  stroke-dasharray: 326.7; stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 6px var(--c));
+  transition: stroke-dashoffset .25s linear, stroke .3s;
+}
+.timer-time {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-family: var(--display); font-weight: 800; font-size: 2rem;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.timer.warn .bar { stroke: var(--gold) }
+.timer.warn .timer-time { color: var(--gold) }
+.timer.warn .timer-ring { animation: tpulse 1s ease-in-out infinite }
+.timer.done .bar { stroke: var(--p2) }
+.timer.done .timer-time { color: var(--p2); font-size: 1.15rem; text-shadow: 0 0 20px var(--p2) }
+@keyframes tpulse { 50% { transform: scale(1.06) } }
+.timer-btns { display: flex; gap: 8px }
+.btn-timer {
+  padding: 11px 20px; border-radius: 100px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--glass-hi); color: var(--fg);
+  font-family: inherit; font-weight: 700; font-size: .85rem;
+  transition: transform .15s, background .15s, color .15s;
+}
+.btn-timer.main { background: var(--gold); color: #0b0914; border-color: var(--gold) }
+.btn-timer:hover { transform: translateY(-2px) }
+.btn-timer:active { transform: scale(.96) }
+.btn-timer:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px }
+.timer-hint { font-size: .75rem; color: var(--fg-muted) }
+
+#game { display: contents }
+
+/* ── Menu / lobby ── */
+.menu-card {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding: 38px 24px 28px; text-align: center;
+  border-radius: 28px; border: 1px solid transparent;
+  background:
+    linear-gradient(160deg, rgba(20,17,38,.85), rgba(12,10,24,.8)) padding-box,
+    linear-gradient(135deg, var(--p1), var(--violet) 50%, var(--p2)) border-box;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 24px 60px -20px rgba(139,107,255,.45);
+  margin-top: 4vh;
+}
+.menu-logo {
+  font-family: var(--display); font-weight: 800;
+  font-size: clamp(1.9rem, 9vw, 2.6rem); line-height: 1.02; letter-spacing: -0.04em;
+  background: linear-gradient(100deg, var(--p1), var(--gold) 50%, var(--p2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.menu-logo span { color: var(--fg); -webkit-text-fill-color: var(--fg); opacity: .85 }
+.menu-sub { color: var(--fg-muted); font-size: .92rem; max-width: 300px; text-wrap: balance }
+.menu-or { color: var(--fg-muted); font-size: .72rem; letter-spacing: .2em; text-transform: uppercase }
+
+.btn-big {
+  width: 100%; padding: 16px 18px; border: none; border-radius: 18px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 2px; align-items: center;
+  background: linear-gradient(110deg, var(--p1), var(--gold), var(--p2));
+  background-size: 200% 100%;
+  color: #0b0914; font-family: var(--display); font-weight: 800; font-size: 1.05rem;
+  box-shadow: 0 10px 36px -8px rgba(255,210,94,.55);
+  transition: transform .15s, background-position .6s;
+}
+.btn-big small { font-family: 'DM Sans', system-ui, sans-serif; font-weight: 600; font-size: .75rem; opacity: .75 }
+.btn-big:hover { transform: translateY(-2px); background-position: 100% 0 }
+.btn-big:active { transform: scale(.98) }
+.btn-big:focus-visible, .btn-ghost:focus-visible, .btn-link:focus-visible, .join-row input:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px }
+
+.btn-ghost {
+  padding: 14px 20px; border-radius: 16px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--glass-hi); color: var(--fg);
+  font-family: inherit; font-weight: 700; font-size: .95rem;
+  transition: transform .15s, background .15s, border-color .15s;
+}
+.btn-ghost:hover { transform: translateY(-2px); border-color: var(--gold) }
+.btn-ghost.wide { width: 100% }
+.btn-link {
+  background: none; border: none; color: var(--fg-muted); cursor: pointer; text-decoration: underline;
+  font-family: inherit; font-size: .82rem; padding: 6px;
+}
+.btn-link:hover { color: var(--fg) }
+
+.join-row { display: flex; gap: 8px; width: 100% }
+.join-row input {
+  flex: 1; min-width: 0; text-align: center; text-transform: uppercase;
+  font-family: var(--display); font-weight: 800; font-size: 1.15rem; letter-spacing: .35em;
+  padding: 14px 8px 14px 16px; border-radius: 16px;
+  border: 1px solid var(--border); background: rgba(0,0,0,.28); color: var(--fg);
+}
+.join-row input::placeholder { letter-spacing: .15em; font-size: .8rem; color: var(--fg-muted); font-weight: 700 }
+
+.room-code {
+  font-family: var(--display); font-weight: 800; font-size: clamp(3rem, 16vw, 4.4rem);
+  letter-spacing: .12em; padding-left: .12em; line-height: 1;
+  background: linear-gradient(100deg, var(--p1), var(--gold), var(--p2));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 24px rgba(255,210,94,.35));
+}
+.qr { width: 164px; height: 164px; padding: 10px; border-radius: 16px; background: #fff; display: grid; place-items: center }
+.qr svg { width: 100%; height: 100%; display: block }
+.wait-pulse { color: var(--fg-muted); font-size: .88rem; display: flex; align-items: center; gap: 10px }
+.wait-pulse::before {
+  content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--p1);
+  box-shadow: 0 0 12px var(--p1); animation: tpulse 1.1s ease-in-out infinite;
+}
+.menu-error { color: var(--p2); font-weight: 700; font-size: 1rem; max-width: 300px; text-wrap: balance }
+
+.room-bar {
+  display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap;
+  font-size: .78rem; color: var(--fg-muted);
+}
+.room-bar b { color: var(--fg) }
+
+.voted-display.wait { border-color: var(--border); color: var(--fg-muted); animation: none }
+.end-screen .btn-link { margin-top: -6px }
+
+[hidden] { display: none !important }
+</style>
+</head>
+<body>
+<!-- ═══ MARKUP ═══ -->
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+<div class="fx" id="fx" aria-hidden="true"></div>
+
+<div class="wrap">
+
+  <!-- Menu / lobby -->
+  <div class="menu" id="menu"></div>
+  <div class="room-bar" id="roomBar" hidden></div>
+
+  <div id="game" hidden>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">A Favor <span>o</span> En Contra</div>
+    <div class="stats">
+      <span class="stat stat-agree"  id="statAgree">🤝 0</span>
+      <span class="stat-sep">·</span>
+      <span class="stat stat-debate" id="statDebate">⚔️ 0</span>
+      <button class="btn-mute" id="btnMute" onclick="toggleSound()" aria-label="Sonido activado" title="Sonido">🔊</button>
+    </div>
+  </header>
+
+  <!-- Progress -->
+  <div class="progress"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+
+  <!-- Question card -->
+  <div class="q-card anim-slide" id="qCard">
+    <div class="q-index" id="qIndex">PREGUNTA 1 / 25</div>
+    <div class="q-text" id="qText"></div>
+    <div class="q-tag" id="qTag"></div>
+  </div>
+
+  <!-- Vote area -->
+  <div class="vote-grid" id="voteGrid">
+    <!-- Player 1 -->
+    <div class="player-panel" id="panel1">
+      <div class="p-label p-label-1">Jugador 1</div>
+      <div class="vote-btns" id="btns1">
+        <button class="btn-vote p1" onclick="castVote(1,'favor')">👍 A favor</button>
+        <button class="btn-vote p1" onclick="castVote(1,'contra')">👎 En contra</button>
+      </div>
+      <div class="p-status" id="status1">Elige tu posición</div>
+    </div>
+    <!-- Player 2 -->
+    <div class="player-panel" id="panel2">
+      <div class="p-label p-label-2">Jugador 2</div>
+      <div class="vote-btns" id="btns2">
+        <button class="btn-vote p2" onclick="castVote(2,'favor')">👍 A favor</button>
+        <button class="btn-vote p2" onclick="castVote(2,'contra')">👎 En contra</button>
+      </div>
+      <div class="p-status" id="status2">Elige tu posición</div>
+    </div>
+  </div>
+
+  <!-- Reveal -->
+  <div class="reveal-wrap" id="revealWrap">
+    <button class="btn-reveal" id="btnReveal" onclick="revealVotes()" disabled>⚡ Revelar</button>
+  </div>
+
+  <!-- Result (injected) -->
+  <div id="resultArea"></div>
+
+  <!-- Next -->
+  <button class="btn-next" id="btnNext" hidden onclick="nextQuestion()">Siguiente pregunta →</button>
+
+  <!-- End screen (injected) -->
+  <div id="endArea"></div>
+
+  </div><!-- /game -->
+</div>
+
+<script src="vendor/peerjs.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script>
+const QUESTIONS = [
+  { text: "¿La piña va en la pizza?", cat: "Comida" },
+  { text: "¿Los celos son una muestra de amor?", cat: "Relaciones" },
+  { text: "¿Las parejas deben compartir sus contraseñas?", cat: "Privacidad" },
+  { text: "¿La infidelidad emocional es peor que la física?", cat: "Relaciones" },
+  { text: "¿Está bien hacer spoilers sin advertir?", cat: "Entretenimiento" },
+  { text: "¿Las mascotas deben dormir en la cama?", cat: "Hogar" },
+  { text: "¿Se puede mantener contacto con ex-parejas?", cat: "Relaciones" },
+  { text: "¿Las redes sociales arruinan las relaciones?", cat: "Tecnología" },
+  { text: "¿Está bien mentir para no herir sentimientos?", cat: "Ética" },
+  { text: "¿El matrimonio sigue siendo necesario?", cat: "Sociedad" },
+  { text: "¿Se puede ser completamente feliz sin hijos?", cat: "Vida" },
+  { text: "¿Los hombres deben pagar siempre en las citas?", cat: "Pareja" },
+  { text: "¿Es normal ver series sin tu pareja?", cat: "Pareja" },
+  { text: "¿El dinero en pareja debería ser completamente compartido?", cat: "Finanzas" },
+  { text: "¿Está bien revisar el celular de tu pareja?", cat: "Privacidad" },
+  { text: "¿El amor a primera vista existe?", cat: "Amor" },
+  { text: "¿Las peleas frecuentes son señal de problemas graves?", cat: "Relaciones" },
+  { text: "¿Los suegros deberían opinar en la relación?", cat: "Familia" },
+  { text: "¿Las personas realmente cambian?", cat: "Filosofía" },
+  { text: "¿Las fotos en redes sociales con tu pareja son necesarias?", cat: "Redes sociales" },
+  { text: "¿El trabajo debería venir antes que los amigos?", cat: "Vida" },
+  { text: "¿Hablar del pasado con tu pareja es siempre buena idea?", cat: "Pareja" },
+  { text: "¿La compatibilidad importa más que el amor?", cat: "Amor" },
+  { text: "¿Las relaciones a distancia realmente funcionan?", cat: "Relaciones" },
+  { text: "¿Los videojuegos son una pérdida de tiempo?", cat: "Entretenimiento" },
+  { text: "¿El dinero puede comprar la felicidad?", cat: "Filosofía" },
+  { text: "¿Tener amigos del sexo opuesto en pareja puede ser un problema?", cat: "Pareja" },
+  { text: "¿Las parejas deben tener exactamente los mismos amigos?", cat: "Pareja" },
+  { text: "¿Está bien que tus amigos opinen sobre tu relación?", cat: "Amistad" },
+  { text: "¿Trabajar desde casa es mejor que en oficina?", cat: "Trabajo" },
+  { text: "¿El ghosting es una forma válida de terminar algo?", cat: "Relaciones" },
+  { text: "¿Está bien seguir a tu ex en redes sociales?", cat: "Relaciones" },
+  { text: "¿La monogamia es natural para los seres humanos?", cat: "Relaciones" },
+  { text: "¿Es mejor vivir juntos antes de casarse?", cat: "Pareja" },
+  { text: "¿Deberías decirle a tu mejor amigo si su pareja le es infiel?", cat: "Amistad" },
+  { text: "¿El éxito profesional vale sacrificar la vida personal?", cat: "Trabajo" },
+  { text: "¿La edad importa en una relación de pareja?", cat: "Relaciones" },
+  { text: "¿Las parejas deben tener exactamente las mismas metas de vida?", cat: "Pareja" },
+  { text: "¿El perdón genuino siempre es posible?", cat: "Filosofía" },
+  { text: "¿Está bien que tu pareja tenga secretos contigo?", cat: "Pareja" },
+  { text: "¿Es correcto juzgar a alguien por sus gustos musicales?", cat: "Entretenimiento" },
+  { text: "¿Publicar fotos de tus hijos en redes sociales está bien?", cat: "Familia" },
+  { text: "¿La suerte importa más que el esfuerzo para tener éxito?", cat: "Filosofía" },
+  { text: "¿Deberías decirle a tu pareja si alguien te coquetea?", cat: "Pareja" },
+  { text: "¿El horóscopo puede decir algo real sobre tu personalidad?", cat: "Creencias" },
+  { text: "¿Las personas introvertidas son más reflexivas que las extrovertidas?", cat: "Personalidad" },
+  { text: "¿El dinero cambia a las personas?", cat: "Filosofía" },
+  { text: "¿Es correcto terminar una amistad por diferencias ideológicas?", cat: "Amistad" },
+  { text: "¿Está bien no invitar a toda la familia a tu boda?", cat: "Familia" },
+  { text: "¿Hay que decirle a alguien si tiene comida en los dientes?", cat: "Social" },
+  { text: "¿Los tatuajes visibles afectan las oportunidades laborales?", cat: "Sociedad" },
+  { text: "¿El primer amor es siempre el más importante?", cat: "Amor" },
+  { text: "¿Es posible ser completamente honesto en una relación?", cat: "Pareja" },
+  { text: "¿Está bien comer carne si te importa el medio ambiente?", cat: "Ética" },
+  { text: "¿Los hijos deben saber siempre la verdad aunque duela?", cat: "Familia" },
+  { text: "¿Está bien mentirle a tus papás siendo adulto?", cat: "Familia" },
+  { text: "¿Las parejas deberían dormir siempre juntas en la misma cama?", cat: "Pareja" },
+  { text: "¿El trabajo forma parte de la identidad de una persona?", cat: "Trabajo" },
+  { text: "¿La amistad entre hombres y mujeres siempre tiene un límite?", cat: "Amistad" },
+  { text: "¿El dulce de leche es mejor que el chocolate?", cat: "Comida" },
+  { text: "¿El asado se hace mejor con carbón que con gas?", cat: "Comida" },
+  { text: "¿El mate se toma amargo?", cat: "Comida" },
+  { text: "¿Está bien comer con las manos en una cita?", cat: "Comida" },
+  { text: "¿El desayuno es la comida más importante del día?", cat: "Comida" },
+  { text: "¿Los fideos se cortan con cuchillo?", cat: "Comida" },
+  { text: "¿Una cita ideal es cenar afuera?", cat: "Pareja" },
+  { text: "¿Hay que avisar siempre dónde estás a tu pareja?", cat: "Pareja" },
+  { text: "¿Está bien que cada uno tenga sus vacaciones por separado?", cat: "Pareja" },
+  { text: "¿Se puede estar en pareja sin decir \"te amo\" seguido?", cat: "Pareja" },
+  { text: "¿Hay que decir \"buen día\" y \"buenas noches\" todos los días?", cat: "Pareja" },
+  { text: "¿Un regalo caro vale más que uno hecho a mano?", cat: "Pareja" },
+  { text: "¿Es mejor dividir las tareas de la casa mitad y mitad?", cat: "Hogar" },
+  { text: "¿Se puede ser amigo de la familia de tu ex?", cat: "Relaciones" },
+  { text: "¿Está bien llegar tarde si avisás?", cat: "Social" },
+  { text: "¿Hay que ir al casamiento de alguien aunque no te caiga bien?", cat: "Social" },
+  { text: "¿Hay que responder los mensajes al instante?", cat: "Redes sociales" },
+  { text: "¿Los audios de WhatsApp largos son una falta de respeto?", cat: "Redes sociales" },
+  { text: "¿Dar \"me gusta\" a fotos de otras personas es una falta de respeto?", cat: "Redes sociales" },
+  { text: "¿Hay que tener las redes sociales privadas?", cat: "Redes sociales" },
+  { text: "¿Mirar las historias de tu ex es normal?", cat: "Redes sociales" },
+  { text: "¿Es mejor tener pocos amigos muy cercanos que muchos conocidos?", cat: "Amistad" },
+  { text: "¿Los amigos de la infancia son los mejores?", cat: "Amistad" },
+  { text: "¿Se puede ser amigo de tu ex?", cat: "Amistad" },
+  { text: "¿Hay que prestarle plata a un amigo?", cat: "Amistad" },
+  { text: "¿Está bien cancelar planes a último momento?", cat: "Amistad" },
+  { text: "¿Los fines de semana son para descansar y no para hacer planes?", cat: "Vida" },
+  { text: "¿Es mejor ser madrugador que trasnochador?", cat: "Vida" },
+  { text: "¿Conviene vivir en la ciudad antes que en el campo?", cat: "Vida" },
+  { text: "¿La playa es mejor que la montaña?", cat: "Vida" },
+  { text: "¿El invierno es mejor que el verano?", cat: "Vida" },
+  { text: "¿Es mejor viajar sin plan que con itinerario?", cat: "Vida" },
+  { text: "¿Hay que conocer otros países antes de los 30?", cat: "Vida" },
+  { text: "¿Tener auto es indispensable?", cat: "Vida" },
+  { text: "¿Se puede ser feliz con un trabajo que no te apasiona?", cat: "Trabajo" },
+  { text: "¿Hay que mezclar el trabajo con la amistad?", cat: "Trabajo" },
+  { text: "¿Es mejor ser empleado que tener un negocio propio?", cat: "Trabajo" },
+  { text: "¿Vale la pena estudiar una carrera universitaria hoy?", cat: "Trabajo" },
+  { text: "¿Hay que ahorrar en dólares?", cat: "Finanzas" },
+  { text: "¿Es mejor gastar en experiencias que en cosas?", cat: "Finanzas" },
+  { text: "¿Está bien hablar de plata con tu pareja desde el principio?", cat: "Finanzas" },
+  { text: "¿Hay que tener cuentas bancarias separadas en pareja?", cat: "Finanzas" },
+  { text: "¿El fútbol es más que un deporte?", cat: "Entretenimiento" },
+  { text: "¿Las películas de antes eran mejores que las de ahora?", cat: "Entretenimiento" },
+  { text: "¿Es mejor leer el libro antes de ver la película?", cat: "Entretenimiento" },
+  { text: "¿Los reality shows son una pérdida de tiempo?", cat: "Entretenimiento" },
+  { text: "¿Ver una serie de corrido es mejor que un capítulo por semana?", cat: "Entretenimiento" },
+  { text: "¿Es válido llorar en una película?", cat: "Entretenimiento" },
+  { text: "¿El celular nos hace menos sociables?", cat: "Tecnología" },
+  { text: "¿La inteligencia artificial va a mejorar nuestras vidas?", cat: "Tecnología" },
+  { text: "¿Hay que dejar el celular fuera de la mesa cuando se come?", cat: "Tecnología" },
+  { text: "¿Las apps de citas son una buena forma de conocer a alguien?", cat: "Tecnología" },
+  { text: "¿Los chicos deberían tener celular antes de los 12 años?", cat: "Tecnología" },
+  { text: "¿Los hijos únicos son más caprichosos?", cat: "Familia" },
+  { text: "¿Hay que visitar a la familia todos los domingos?", cat: "Familia" },
+  { text: "¿Los abuelos pueden malcriar a los nietos?", cat: "Familia" },
+  { text: "¿Es mejor criar con firmeza que con permisividad?", cat: "Familia" },
+  { text: "¿Hay que mudarse lejos de la familia para madurar?", cat: "Familia" },
+  { text: "¿Tener hijos cambia la pareja para bien?", cat: "Familia" },
+  { text: "¿El destino existe o lo construimos nosotros?", cat: "Filosofía" },
+  { text: "¿Es mejor saber la verdad aunque duela?", cat: "Filosofía" },
+  { text: "¿Hay vida inteligente en otros planetas?", cat: "Creencias" },
+  { text: "¿Las casualidades existen o todo pasa por algo?", cat: "Creencias" },
+  { text: "¿Los fantasmas existen?", cat: "Creencias" },
+  { text: "¿Hay que creer en el karma?", cat: "Creencias" },
+  { text: "¿La gente buena tiene más suerte en la vida?", cat: "Ética" },
+  { text: "¿Está bien quedarse con algo que encontraste en la calle?", cat: "Ética" },
+  { text: "¿Se puede ser honesto sin ser cruel?", cat: "Ética" },
+  { text: "¿Una mentira piadosa a veces es lo mejor?", cat: "Ética" },
+  { text: "¿Cambiar de opinión es una muestra de debilidad?", cat: "Personalidad" },
+  { text: "¿Es mejor ser admirado que querido?", cat: "Personalidad" },
+  { text: "¿Hay que pedir perdón aunque no tengas la culpa?", cat: "Personalidad" },
+  { text: "¿La primera impresión es la que cuenta?", cat: "Personalidad" },
+  { text: "¿Los opuestos se atraen?", cat: "Amor" },
+  { text: "¿El amor alcanza para sostener una relación?", cat: "Amor" },
+  { text: "¿Se puede amar a dos personas a la vez?", cat: "Amor" },
+  { text: "¿Hay que hacer una escapada romántica por lo menos una vez al año?", cat: "Amor" },
+];
+
+
+// ═══ SONIDO (sintetizado con WebAudio, sin archivos) ═══
+let soundOn = true;
+try { soundOn = localStorage.getItem('biri-sound') !== 'off'; } catch (e) {}
+let actx = null;
+
+function audio() {
+  if (!soundOn) return null;
+  try {
+    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  } catch (e) { return null; }
+}
+
+function tone(freq, dur, { type = 'sine', vol = 0.15, at = 0, to = null } = {}) {
+  const c = audio(); if (!c) return;
+  const t = c.currentTime + at;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(c.destination);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+
+const sfx = {
+  vote(p)  { tone(p === 1 ? 660 : 520, 0.14, { type: 'triangle', vol: 0.18 }); tone(p === 1 ? 990 : 780, 0.18, { type: 'sine', vol: 0.08, at: 0.06 }); },
+  ready()  { tone(440, 0.12, { type: 'square', vol: 0.05 }); tone(660, 0.12, { type: 'square', vol: 0.05, at: 0.09 }); tone(880, 0.22, { type: 'square', vol: 0.06, at: 0.18 }); },
+  agree()  { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.28, { type: 'triangle', vol: 0.16, at: i * 0.08 })); tone(1568, 0.5, { type: 'sine', vol: 0.07, at: 0.34 }); },
+  debate() { tone(180, 0.35, { type: 'sawtooth', vol: 0.12, to: 70 }); tone(120, 0.45, { type: 'square', vol: 0.09, at: 0.05, to: 60 }); tone(740, 0.12, { type: 'sawtooth', vol: 0.05, at: 0.3 }); },
+  tick()   { tone(1200, 0.05, { type: 'square', vol: 0.06 }); },
+  alarm()  { [0, 0.28, 0.56].forEach(a => { tone(880, 0.2, { type: 'square', vol: 0.12, at: a }); tone(1320, 0.2, { type: 'sine', vol: 0.08, at: a }); }); },
+  next()   { tone(600, 0.07, { type: 'sine', vol: 0.1 }); },
+  start()  { tone(500, 0.1, { type: 'triangle', vol: 0.12 }); tone(750, 0.16, { type: 'triangle', vol: 0.12, at: 0.08 }); },
+  end()    { [523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.15, at: i * 0.13 })); tone(1047, 0.9, { type: 'sine', vol: 0.1, at: 0.8 }); }
+};
+
+function syncMute() {
+  const b = document.getElementById('btnMute');
+  b.textContent = soundOn ? '🔊' : '🔇';
+  b.classList.toggle('off', !soundOn);
+  b.setAttribute('aria-label', soundOn ? 'Sonido activado' : 'Sonido desactivado');
+}
+function toggleSound() {
+  soundOn = !soundOn;
+  try { localStorage.setItem('biri-sound', soundOn ? 'on' : 'off'); } catch (e) {}
+  syncMute();
+  if (soundOn) sfx.next();
+}
+
+// ═══ TIMER DE DEBATE ═══
+const DEBATE_MS = 120000;
+const RING = 326.7;
+let tmr = { id: null, endAt: 0, left: DEBATE_MS, running: false, lastSec: null };
+
+function timerStop() {
+  clearInterval(tmr.id);
+  tmr = { id: null, endAt: 0, left: DEBATE_MS, running: false, lastSec: null };
+}
+
+function fmt(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function timerRender() {
+  const box = document.getElementById('timer');
+  if (!box) return;
+  const done = tmr.left <= 0;
+  box.classList.toggle('warn', !done && tmr.left <= 10000 && (tmr.running || tmr.left < DEBATE_MS));
+  box.classList.toggle('done', done);
+  document.getElementById('timerTime').textContent = done ? '¡Tiempo!' : fmt(tmr.left);
+  document.getElementById('timerBar').style.strokeDashoffset = RING * (1 - tmr.left / DEBATE_MS);
+  const main = document.getElementById('timerMain');
+  main.textContent = done ? '↺ Otra vez' : tmr.running ? '⏸ Pausa' : (tmr.left < DEBATE_MS ? '▶ Seguir' : '▶ Empezar debate');
+  document.getElementById('timerHint').textContent = done ? 'Se acabó. ¿Alguien logró convencer al otro?' : tmr.running ? 'Hablen por turnos. ¡Argumenten!' : tmr.left === DEBATE_MS ? 'Arranca en un instante…' : 'En pausa. Toquen para seguir.';
+}
+
+function timerTick() {
+  tmr.left = tmr.endAt - Date.now();
+  const sec = Math.ceil(tmr.left / 1000);
+  if (tmr.left <= 0) {
+    tmr.left = 0; tmr.running = false;
+    clearInterval(tmr.id); tmr.id = null;
+    sfx.alarm();
+    burst(['⏰', '🔔', '💬'], 10);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    saveSession();
+  } else if (sec !== tmr.lastSec) {
+    tmr.lastSec = sec;
+    if (sec <= 10) sfx.tick();
+  }
+  timerRender();
+}
+
+function timerSend() {
+  if (mode === 'online') send({ t: 'timer', q: cur, running: tmr.running, left: tmr.left });
+}
+
+// Aplica el estado del timer que vino del otro celular
+function timerApply(running, left) {
+  clearInterval(tmr.id); tmr.id = null;
+  tmr.left = left; tmr.running = running; tmr.lastSec = null;
+  if (running) { sfx.start(); tmr.endAt = Date.now() + left; tmr.id = setInterval(timerTick, 200); }
+  timerRender();
+  saveSession();
+}
+
+// Arranca solo al mostrarse el "¡A debatir!". No se sincroniza por red:
+// los dos celulares revelan a la vez y cada uno lo arranca por su cuenta.
+function timerAuto() {
+  const q = cur;
+  setTimeout(() => {
+    if (q !== cur || tmr.running || tmr.left !== DEBATE_MS || !document.getElementById('timer')) return;
+    sfx.start();
+    tmr.endAt = Date.now() + tmr.left;
+    tmr.running = true;
+    tmr.id = setInterval(timerTick, 200);
+    timerRender();
+    saveSession();
+  }, 1200);
+}
+
+function timerToggle() {
+  if (tmr.left <= 0) tmr.left = DEBATE_MS;           // reiniciar tras terminar
+  if (tmr.running) {                                   // pausar
+    clearInterval(tmr.id); tmr.id = null;
+    tmr.running = false;
+  } else {                                             // empezar / seguir
+    sfx.start();
+    tmr.endAt = Date.now() + tmr.left;
+    tmr.running = true;
+    tmr.id = setInterval(timerTick, 200);
+  }
+  timerRender();
+  timerSend();
+  saveSession();
+}
+
+function timerReset() {
+  clearInterval(tmr.id);
+  tmr = { id: null, endAt: 0, left: DEBATE_MS, running: false, lastSec: null };
+  timerRender();
+  timerSend();
+  saveSession();
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+const TOTAL = 15;
+let deck = [];
+let cur = 0;
+let votes = { 1: null, 2: null };
+let score = { agree: 0, debate: 0 };
+let revealed = false;
+
+// Modo de juego: 'local' (un celular) u 'online' (dos celulares)
+let mode = 'local';
+let me = 1;                 // número de jugador propio en modo online
+let pending = {};           // votos del otro que llegaron antes de que yo llegue a esa pregunta
+let pendingNext = null;
+let revealTimer = null;
+let started = false;        // hay una partida en curso (local u online)
+let deckIdx = [];           // índices del mazo actual (se guarda y se sincroniza)
+
+// Preguntas ya vistas HOY (se guardan en este navegador y se olvidan al cambiar el día).
+// Se identifican por su texto, así agregar preguntas nuevas no rompe el historial.
+const SEEN_KEY = 'biri-seen';
+const today = () => new Date().toLocaleDateString('en-CA');   // YYYY-MM-DD, hora local
+function loadSeen() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SEEN_KEY) || 'null');
+    if (d && d.day === today() && Array.isArray(d.q)) return new Set(d.q);
+  } catch (e) {}
+  return new Set();
+}
+function saveSeen() {
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify({ day: today(), q: [...seen] })); } catch (e) {}
+}
+let seen = loadSeen();
+let seenDay = today();
+function resetSeen() { seen = new Set(); saveSeen(); showMenu('home'); }
+
+function newDeckIdx() {
+  if (seenDay !== today()) { seen = new Set(); seenDay = today(); }   // cambió el día
+  const all = [...QUESTIONS.keys()];
+  const pool = all.filter(i => !seen.has(QUESTIONS[i].text));
+  let idx;
+  if (pool.length >= TOTAL) {
+    idx = shuffle(pool).slice(0, TOTAL);
+  } else {
+    // Quedan pocas sin usar: van todas, y se completa con un ciclo nuevo
+    idx = shuffle(pool);
+    const rest = shuffle(all.filter(i => !idx.includes(i))).slice(0, TOTAL - idx.length);
+    idx = idx.concat(rest);
+    seen = new Set(); saveSeen();   // se agotaron las de hoy: empieza un ciclo nuevo
+  }
+  return idx;
+}
+
+function init(idx) {
+  timerStop();
+  syncMute();
+  clearTimeout(revealTimer);
+  pending = {}; pendingNext = null;
+  deckIdx = idx || newDeckIdx();
+  deck = deckIdx.map(i => QUESTIONS[i]);
+  cur = 0;
+  votes = { 1: null, 2: null };
+  score = { agree: 0, debate: 0 };
+  revealed = false;
+  updateStats();
+  renderQuestion();
+}
+
+function updateStats() {
+  document.getElementById('statAgree').textContent  = '🤝 ' + score.agree;
+  document.getElementById('statDebate').textContent = '⚔️ ' + score.debate;
+  document.getElementById('progressFill').style.width = (cur / TOTAL * 100) + '%';
+}
+
+function renderQuestion() {
+  const q = deck[cur];
+  seen.add(q.text); saveSeen();
+  document.getElementById('qIndex').textContent = `PREGUNTA ${cur + 1} / ${TOTAL}`;
+  document.getElementById('qText').textContent  = q.text;
+  document.getElementById('qTag').textContent   = q.cat;
+
+  timerStop();
+  clearTimeout(revealTimer);
+
+  // Reset vote state
+  votes = { 1: null, 2: null };
+  revealed = false;
+
+  // Reset player panels
+  for (const p of [1, 2]) {
+    const panel = document.getElementById('panel' + p);
+    panel.classList.remove('ready-p1', 'ready-p2');
+
+    const mine = mode === 'local' || p === me;
+    document.getElementById('btns' + p).innerHTML = mine
+      ? `<button class="btn-vote p${p}" onclick="castVote(${p},'favor')">👍 A favor</button>
+         <button class="btn-vote p${p}" onclick="castVote(${p},'contra')">👎 En contra</button>`
+      : `<div class="voted-display wait">⏳ Pensando…</div>`;
+
+    document.getElementById('status' + p).textContent = mine ? 'Elige tu posición' : '';
+    panel.querySelector('.p-label').textContent = mode === 'online' ? (p === me ? 'Vos · J' : 'Pareja · J') + p : 'Jugador ' + p;
+  }
+
+  document.getElementById('btnReveal').disabled = true;
+  document.getElementById('resultArea').innerHTML = '';
+  document.getElementById('btnNext').hidden = true;
+  document.getElementById('voteGrid').hidden  = false;
+  document.getElementById('revealWrap').hidden = mode === 'online';
+
+  // Animate card in
+  const card = document.getElementById('qCard');
+  card.classList.remove('anim-slide');
+  void card.offsetWidth;
+  card.classList.add('anim-slide');
+
+  // Voto del otro que llegó antes de que yo mostrara esta pregunta
+  if (mode === 'online' && pending[cur] !== undefined) {
+    const v = pending[cur]; delete pending[cur];
+    remoteVote(v);
+  }
+  saveSession();
+}
+
+function castVote(player, choice) {
+  if (votes[player] !== null || revealed) return;
+  if (mode === 'online' && player !== me) return;
+  votes[player] = choice;
+  sfx.vote(player);
+  if (mode === 'online') send({ t: 'vote', q: cur, v: choice });
+
+  // Los botones se reemplazan por un sello: el voto queda oculto hasta revelar
+  sealVote(player);
+  saveSession();
+
+  if (votes[1] !== null && votes[2] !== null) bothVoted();
+}
+
+function bothVoted() {
+  document.getElementById('status1').textContent = '¡Listos!';
+  document.getElementById('status2').textContent = '¡Listos!';
+  setTimeout(sfx.ready, 250);
+  if (mode === 'online') {
+    // En online no hay botón: se revela solo, a la vez en los dos celulares
+    clearTimeout(revealTimer);
+    revealTimer = setTimeout(revealVotes, 1100);
+  } else {
+    document.getElementById('btnReveal').disabled = false;
+  }
+}
+
+// El otro jugador votó (online). Solo guardamos el voto; se ve recién al revelar.
+function remoteVote(v, silent) {
+  const other = 3 - me;
+  if (votes[other] !== null || revealed) return;
+  votes[other] = v;
+  document.getElementById('panel' + other).classList.add('ready-p' + other);
+  document.getElementById('status' + other).textContent = '✓ Ya votó';
+  document.getElementById('btns' + other).innerHTML = '<div class="voted-display wait">🔒 Ya votó</div>';
+  if (silent !== true) sfx.vote(other);
+  saveSession();
+  if (votes[1] !== null && votes[2] !== null) bothVoted();
+}
+
+function revealVotes(silent) {
+  if (!votes[1] || !votes[2] || revealed) return;
+  clearTimeout(revealTimer);
+  revealed = true;
+
+  document.getElementById('voteGrid').hidden   = true;
+  document.getElementById('revealWrap').hidden = true;
+
+  const v1 = votes[1];
+  const v2 = votes[2];
+  const agree = v1 === v2;
+
+  if (silent !== true) { if (agree) score.agree++; else score.debate++; }   // al restaurar, el puntaje ya viene guardado
+  updateStats();
+
+  const icon    = agree ? '🤝' : '⚔️';
+  const verdict = agree ? '¡De acuerdo!' : '¡A debatir!';
+  const cls     = agree ? 'agree' : 'disagree';
+  const desc    = agree
+    ? 'Los dos piensan igual. Cuenten por qué están de acuerdo.'
+    : 'Opiniones opuestas. Tienen 2 minutos para convencerse mutuamente.';
+
+  const choiceLabel = c => c === 'favor' ? '👍 A favor' : '👎 En contra';
+
+  document.getElementById('resultArea').innerHTML = `
+    <div class="result-card ${cls}-card anim-pop">
+      <div class="result-icon">${icon}</div>
+      <div class="result-verdict ${cls}-text">${verdict}</div>
+      <div class="votes-row">
+        <span class="vote-chip chip-p1">J1: ${choiceLabel(v1)}</span>
+        <span class="vote-chip chip-p2">J2: ${choiceLabel(v2)}</span>
+      </div>
+      <div class="result-desc">${desc}</div>
+      ${agree ? '' : `
+      <div class="timer" id="timer">
+        <div class="timer-ring">
+          <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="bar" id="timerBar" cx="60" cy="60" r="52"/></svg>
+          <div class="timer-time" id="timerTime" role="timer" aria-live="off">2:00</div>
+        </div>
+        <div class="timer-btns">
+          <button class="btn-timer main" id="timerMain" onclick="timerToggle()">▶ Empezar debate</button>
+          <button class="btn-timer" onclick="timerReset()" aria-label="Reiniciar timer">↺</button>
+        </div>
+        <div class="timer-hint" id="timerHint"></div>
+      </div>`}
+    </div>`;
+
+  document.getElementById('btnNext').hidden = false;
+  if (silent === true) { if (!agree) timerRender(); saveSession(); return; }   // restauración: sin sonidos ni efectos
+  if (!agree) { timerRender(); timerAuto(); }
+  agree ? sfx.agree() : sfx.debate();
+  burst(agree ? ['🎉','✨','💚','🤝','⭐'] : ['⚡','🔥','💥','⚔️','🗯️'], agree ? 26 : 18);
+
+  saveSession();
+
+  // El otro ya tocó "Siguiente" antes de que yo terminara de revelar
+  if (pendingNext === cur + 1) { pendingNext = null; nextQuestion(true); }
+}
+
+function burst(set, n) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const fx = document.getElementById('fx');
+  for (let i = 0; i < n; i++) {
+    const el = document.createElement('span');
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 90 + Math.random() * Math.min(innerWidth, 520) * 0.55;
+    el.textContent = set[i % set.length];
+    el.style.setProperty('--x', Math.cos(ang) * dist + 'px');
+    el.style.setProperty('--y', Math.sin(ang) * dist - 60 + 'px');
+    el.style.setProperty('--r', (Math.random() * 540 - 270) + 'deg');
+    el.style.setProperty('--s', (1 + Math.random() * 1.2) + 'rem');
+    el.style.setProperty('--t', (0.9 + Math.random() * 0.7) + 's');
+    fx.appendChild(el);
+    setTimeout(() => el.remove(), 1800);
+  }
+}
+
+function nextQuestion(fromRemote) {
+  timerStop();
+  sfx.next();
+  if (mode === 'online' && fromRemote !== true) send({ t: 'next', to: cur + 1 });
+  cur++;
+  if (cur >= TOTAL) {
+    showEnd();
+  } else {
+    renderQuestion();
+  }
+}
+
+function showEnd(silent) {
+  document.getElementById('qCard').hidden    = true;
+  document.getElementById('voteGrid').hidden = true;
+  document.getElementById('revealWrap').hidden = true;
+  document.getElementById('resultArea').innerHTML = '';
+  document.getElementById('btnNext').hidden  = true;
+  document.getElementById('progressFill').style.width = '100%';
+
+  const pct = Math.round(score.agree / TOTAL * 100);
+  const msg = score.agree > score.debate
+    ? '¡Mucho en común! Son más parecidos de lo que creen.'
+    : score.debate > score.agree
+      ? '¡Choque de ideas! Eso hace que la conversación nunca sea aburrida.'
+      : 'Mitad acuerdos, mitad debates. Balance perfecto.';
+
+  timerStop();
+  if (silent !== true) { sfx.end(); burst(['🏆','🎉','✨','⭐','🎊'], 36); }
+  document.getElementById('endArea').innerHTML = `
+    <div class="end-screen anim-pop">
+      <div class="end-trophy">🏆</div>
+      <div class="end-title">¡Juego terminado!</div>
+      <div class="end-subtitle">${pct}% de las rondas estuvieron de acuerdo</div>
+      <div class="end-stats">
+        <div class="end-stat">
+          <div class="end-num num-agree">${score.agree}</div>
+          <div class="end-stat-lbl">De acuerdo</div>
+        </div>
+        <div class="end-stat">
+          <div class="end-num num-disagree">${score.debate}</div>
+          <div class="end-stat-lbl">Debates</div>
+        </div>
+      </div>
+      <div class="end-msg">${msg}</div>
+      ${endButtons()}
+    </div>`;
+  saveSession();
+}
+
+function endButtons() {
+  const again = '<button class="btn-restart" onclick="restartGame()">Jugar de nuevo</button>';
+  if (mode === 'local') return again + '<button class="btn-link" onclick="leaveRoom()">Volver al inicio</button>';
+  return (me === 1 ? again : '<div class="end-msg">Esperando a que el Jugador 1 inicie otra partida…</div>')
+       + '<button class="btn-link" onclick="leaveRoom()">Salir de la sala</button>';
+}
+
+function restartGame() {
+  document.getElementById('qCard').hidden = false;
+  document.getElementById('endArea').innerHTML = '';
+  if (mode === 'online') {
+    const idx = freshDeck();
+    send({ t: 'restart', deck: idx });
+    init(idx);
+  } else {
+    init();
+  }
+}
+
+
+// ═══ SESIÓN PERSISTENTE: la partida sobrevive a bloquear la pantalla / recargar ═══
+// Solo termina al tocar "Salir" (o a las 6 h sin jugar).
+const SESSION_KEY = 'biri-session';
+const SESSION_TTL = 6 * 3600 * 1000;
+
+function saveSession() {
+  if (!started) return;
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      ts: Date.now(), mode, me, room: roomCode, deck: deckIdx, cur, votes, revealed, score,
+      timer: { running: tmr.running, endAt: tmr.endAt, left: tmr.left }
+    }));
+  } catch (e) {}
+}
+function loadSession() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (d && Date.now() - d.ts < SESSION_TTL && Array.isArray(d.deck) && d.deck.length &&
+        d.deck.every(i => QUESTIONS[i])) return d;
+  } catch (e) {}
+  return null;
+}
+function clearSession() {
+  started = false;
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+}
+
+// Mantiene la pantalla encendida mientras se juega (evita que se bloquee sola)
+let wl = null;
+async function wakeLock() {
+  try {
+    if (started && 'wakeLock' in navigator && document.visibilityState === 'visible' && !wl) {
+      wl = await navigator.wakeLock.request('screen');
+      wl.addEventListener('release', () => { wl = null; });
+    }
+  } catch (e) { wl = null; }
+}
+function wakeRelease() { try { if (wl) wl.release(); } catch (e) {} wl = null; }
+
+function sealVote(player) {
+  document.getElementById('panel' + player).classList.add('ready-p' + player);
+  document.getElementById('status' + player).textContent = '✓ Voto registrado';
+  document.getElementById('btns' + player).innerHTML =
+    `<div class="voted-display voted-display-${player}">🔒 Esperando al otro...</div>`;
+}
+
+function timerRestore(t) {
+  clearInterval(tmr.id); tmr.id = null;
+  const left = t.running ? t.endAt - Date.now() : t.left;
+  tmr.left = Math.max(0, left); tmr.running = false; tmr.lastSec = null;
+  if (t.running && left > 0) { tmr.running = true; tmr.endAt = t.endAt; tmr.id = setInterval(timerTick, 200); }
+  timerRender();
+  if (!t.running && t.left === DEBATE_MS) timerAuto();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODO ONLINE (2 celulares) — WebRTC con PeerJS
+// ═══════════════════════════════════════════════════════════
+const ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // sin 0/O/1/I para evitar confusiones
+const ICE = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
+    username: 'openrelayproject', credential: 'openrelayproject' }   // relay público de respaldo
+] };
+const PEER_OPTS = Object.assign({ config: ICE, debug: 0 }, window.PEER_OPTS || {});
+
+let peer = null, conn = null, roomCode = '', leaving = false, joinTimeout = null, hostStart = null;
+let linkOk = false, lastRecv = 0, retryTimer = null, retryMs = 1500, hbTimer = null, attemptAt = 0;
+
+const peerId  = c => 'biri-biri-' + c;
+const genCode = () => Array.from({ length: 4 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');
+const freshDeck = newDeckIdx;
+const roomUrl = c => location.origin + location.pathname + '?sala=' + c;
+const inGame = () => started && mode === 'online';
+
+function send(msg) { try { if (conn && conn.open) conn.send(msg); } catch (e) {} }
+function sendState() { send({ t: 'state', q: cur, v: votes[me] || null, score, deck: deckIdx }); }
+
+function showMenu(view, d = {}) {
+  const m = document.getElementById('menu');
+  document.getElementById('game').hidden = true;
+  document.getElementById('roomBar').hidden = true;
+  m.hidden = false;
+  let html = '';
+  if (view === 'home') {
+    if (seenDay === today()) { /* mantiene el contador al día */ } else { seen = new Set(); seenDay = today(); }
+    html = `
+      <div class="menu-card anim-slide">
+        <div class="menu-logo">A Favor <span>o</span> En Contra</div>
+        <p class="menu-sub">Descubran cuánto piensan igual… o cuánto les gusta discutir.</p>
+        <button class="btn-big" onclick="createRoom()">🌐 Crear sala<small>para jugar desde 2 celulares</small></button>
+        <div class="join-row">
+          <input id="joinCode" maxlength="4" placeholder="CÓDIGO" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Código de sala"
+                 oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')" onkeydown="if(event.key==='Enter')joinFromInput()">
+          <button class="btn-ghost" onclick="joinFromInput()">Unirme</button>
+        </div>
+        <div class="menu-or">o</div>
+        <button class="btn-ghost wide" onclick="startLocal()">📱 Jugar en un solo celular</button>
+        ${seen.size ? `<button class="btn-link" onclick="resetSeen()">↺ Olvidar ${seen.size === 1 ? 'la pregunta vista' : 'las ' + seen.size + ' preguntas vistas'} hoy</button>` : ''}
+      </div>`;
+  } else if (view === 'host') {
+    html = `
+      <div class="menu-card anim-slide">
+        <div class="menu-sub">Código de sala</div>
+        <div class="room-code">${d.code}</div>
+        <div class="qr" id="qr"></div>
+        <button class="btn-big" id="btnShare" onclick="shareRoom()">📤 Compartir link</button>
+        <div class="wait-pulse">Esperando a tu pareja…</div>
+        <button class="btn-link" onclick="leaveRoom()">Cancelar</button>
+      </div>`;
+  } else if (view === 'busy') {
+    html = `
+      <div class="menu-card anim-slide">
+        <div class="wait-pulse">${d.text}</div>
+        <button class="btn-link" onclick="leaveRoom()">Cancelar</button>
+      </div>`;
+  } else if (view === 'error') {
+    html = `
+      <div class="menu-card anim-slide">
+        <div style="font-size:2.4rem">😕</div>
+        <div class="menu-error">${d.msg}</div>
+        <button class="btn-big" onclick="leaveRoom()">Volver al inicio</button>
+      </div>`;
+  }
+  m.innerHTML = html;
+  if (view === 'host') {
+    try {
+      const qr = qrcode(0, 'M'); qr.addData(roomUrl(d.code)); qr.make();
+      document.getElementById('qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    } catch (e) { document.getElementById('qr').hidden = true; }
+  }
+}
+
+
+function startLocal() {
+  mode = 'local'; me = 1; started = true;
+  document.getElementById('menu').hidden = true;
+  document.getElementById('roomBar').hidden = true;
+  document.getElementById('game').hidden = false;
+  document.getElementById('qCard').hidden = false;
+  document.getElementById('endArea').innerHTML = '';
+  wakeLock();
+  init();
+}
+
+function joinFromInput() {
+  const c = (document.getElementById('joinCode').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (c.length !== 4) { document.getElementById('joinCode').focus(); return; }
+  joinRoom(c);
+}
+
+
+// ── Conexión ──
+function killPeer() {
+  const c = conn, p = peer;
+  conn = null; peer = null;          // los eventos viejos se ignoran (c !== conn)
+  try { if (c) c.close(); } catch (e) {}
+  try { if (p) p.destroy(); } catch (e) {}
+}
+function cleanupNet() {
+  clearTimeout(joinTimeout); clearTimeout(retryTimer);
+  killPeer(); hostStart = null;
+}
+
+function renderBar() {
+  const bar = document.getElementById('roomBar');
+  if (!inGame()) { bar.hidden = true; return; }
+  const who = `Sos el <b style="color:var(--p${me})">Jugador ${me}</b>`;
+  bar.innerHTML = (linkOk
+    ? `🟢 Sala <b>${roomCode}</b> · ${who}`
+    : `🟡 ${me === 1 ? 'Esperando que vuelva tu pareja…' : 'Reconectando…'} <span style="opacity:.7">(tu partida sigue guardada)</span>`)
+    + ` · <button class="btn-link" onclick="leaveRoom()">Salir</button>`;
+  bar.hidden = false;
+}
+function linkUp()   { linkOk = true; lastRecv = Date.now(); retryMs = 1500; clearTimeout(retryTimer); renderBar(); }
+function linkDown() { if (linkOk) { linkOk = false; renderBar(); } }
+
+function netError(err) {
+  if (leaving) return;
+  if (inGame()) { attemptAt = 0; linkDown(); scheduleRetry(); return; }   // en partida nunca se rinde
+  const t = err && err.type;
+  const msg =
+    t === 'peer-unavailable' ? 'No encontramos esa sala. Revisá el código y que tu pareja siga con la pantalla abierta.' :
+    t === 'timeout'          ? 'No se pudo establecer la conexión. Probá con la misma red WiFi o volvé a intentar.' :
+    (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed')
+                             ? 'No pudimos contactar al servidor de conexión. Revisá tu internet.' :
+                               'Falló la conexión. Probá de nuevo.';
+  cleanupNet();
+  showMenu('error', { msg });
+}
+
+function wireConn(c) {
+  c.on('data', m => { lastRecv = Date.now(); onMsg(m); });
+  c.on('close', () => { if (c === conn) handleDrop(); });
+  c.on('error', e => { if (c === conn) handleDrop(e); });
+}
+function handleDrop(err) {
+  if (leaving) return;
+  if (inGame()) { linkDown(); scheduleRetry(); return; }
+  if (err) { netError(err); return; }
+  cleanupNet(); showMenu('error', { msg: 'Se desconectó la otra persona.' });
+}
+
+// Reintentos: sin límite mientras la partida siga abierta
+function scheduleRetry(now) {
+  if (leaving || !inGame()) return;
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(netRetry, now ? 0 : retryMs);
+  retryMs = Math.min(Math.round(retryMs * 1.5), 6000);
+}
+function netRetry() {
+  if (leaving || !inGame()) return;
+  if (conn && conn.open) { linkUp(); return; }
+  if (me === 1) {
+    // El anfitrión mantiene su sala y espera que el otro vuelva
+    if (!peer || peer.destroyed) hostUp(false);
+    else if (peer.disconnected) { try { peer.reconnect(); } catch (e) { hostUp(false); } }
+  } else if (!(peer && !peer.destroyed && conn && !conn.open && Date.now() - attemptAt < 12000)) {
+    guestUp();
+  }
+  scheduleRetry();
+}
+
+function hostUp(fresh, tries = 0) {
+  killPeer();
+  peer = new Peer(peerId(roomCode), PEER_OPTS);
+  peer.on('open', () => { if (inGame()) renderBar(); else if (fresh) showMenu('host', { code: roomCode }); });
+  peer.on('connection', onHostConn);
+  peer.on('disconnected', () => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} });
+  peer.on('error', err => {
+    if (inGame()) { scheduleRetry(); return; }
+    if (err.type === 'unavailable-id' && fresh && tries < 5) { roomCode = genCode(); hostUp(true, tries + 1); return; }
+    netError(err);
+  });
+}
+
+function onHostConn(c) {
+  if (conn && conn.open) { c.on('open', () => c.close()); return; }   // sala de 2: rechaza a un tercero
+  conn = c; wireConn(c);
+  let started1 = false, gotHello = false;
+  const begin = () => {
+    if (started1) return; started1 = true;
+    const idx = freshDeck(); send({ t: 'start', deck: idx }); beginOnline(idx);
+  };
+  hostStart = () => { gotHello = true; if (c.open) begin(); };
+  c.on('open', () => {
+    if (inGame()) { linkUp(); sendState(); return; }          // la otra persona volvió a una partida en curso
+    // Lobby: esperamos su historial del día antes de armar el mazo
+    if (gotHello) begin(); else setTimeout(begin, 2500);
+  });
+}
+
+function guestUp() {
+  killPeer(); attemptAt = Date.now();
+  peer = new Peer(PEER_OPTS);
+  peer.on('open', () => {
+    const c = peer.connect(peerId(roomCode), { reliable: true });
+    conn = c; wireConn(c);
+    c.on('open', () => {
+      clearTimeout(joinTimeout);
+      if (inGame()) { linkUp(); sendState(); }
+      else send({ t: 'hello', seen: [...seen] });
+    });
+    clearTimeout(joinTimeout);
+    joinTimeout = setTimeout(() => {
+      if (c !== conn || c.open) return;
+      if (inGame()) { attemptAt = 0; scheduleRetry(); } else netError({ type: 'timeout' });
+    }, 15000);
+  });
+  peer.on('disconnected', () => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} });
+  peer.on('error', err => {
+    if (inGame()) { attemptAt = 0; scheduleRetry(); return; }
+    netError(err);
+  });
+}
+
+function createRoom() {
+  if (typeof Peer === 'undefined') { showMenu('error', { msg: 'No se pudo cargar el modo online.' }); return; }
+  cleanupNet(); clearSession(); leaving = false;
+  me = 1; roomCode = genCode();
+  showMenu('busy', { text: 'Creando sala…' });
+  hostUp(true);
+}
+
+function joinRoom(code) {
+  if (typeof Peer === 'undefined') { showMenu('error', { msg: 'No se pudo cargar el modo online.' }); return; }
+  cleanupNet(); clearSession(); leaving = false;
+  me = 2; roomCode = code;
+  showMenu('busy', { text: 'Conectando a la sala ' + code + '…' });
+  guestUp();
+}
+
+function beginOnline(idx) {
+  clearTimeout(joinTimeout);
+  mode = 'online'; started = true;
+  document.getElementById('menu').hidden = true;
+  document.getElementById('game').hidden = false;
+  document.getElementById('qCard').hidden = false;
+  document.getElementById('endArea').innerHTML = '';
+  linkUp();
+  hbStart(); wakeLock();
+  sfx.start();
+  init(idx);
+}
+
+// Latido: detecta conexiones "zombi" (típico al volver de un bloqueo de pantalla)
+function hbStart() {
+  clearInterval(hbTimer);
+  let n = 0;
+  hbTimer = setInterval(() => {
+    if (!inGame() || leaving) return;
+    n++;
+    if (conn && conn.open) {
+      if (n % 2 === 0) send({ t: 'ping' });
+      if (document.visibilityState === 'visible' && Date.now() - lastRecv > 15000) {
+        const c = conn; conn = null; try { c.close(); } catch (e) {}
+        handleDrop();
+      }
+    }
+  }, 2000);
+}
+
+function onVisible() {
+  if (!started) return;
+  wakeLock();
+  if (!inGame()) return;
+  lastRecv = Math.min(lastRecv, Date.now() - 7000);   // si en ~8 s no llega nada, se reconecta
+  send({ t: 'ping' });
+  if (!linkOk) scheduleRetry(true);
+}
+
+function restoreSession(d) {
+  mode = d.mode === 'online' ? 'online' : 'local';
+  me = d.me === 2 ? 2 : 1; roomCode = d.room || '';
+  started = true; leaving = false;
+  deckIdx = d.deck; deck = deckIdx.map(i => QUESTIONS[i]);
+  cur = d.cur | 0; score = d.score || { agree: 0, debate: 0 };
+  document.getElementById('menu').hidden = true;
+  document.getElementById('game').hidden = false;
+  document.getElementById('qCard').hidden = false;
+  document.getElementById('endArea').innerHTML = '';
+  syncMute(); updateStats();
+  if (mode === 'online') { linkOk = false; renderBar(); hbStart(); }
+  else document.getElementById('roomBar').hidden = true;
+
+  if (cur >= TOTAL) {
+    showEnd(true);
+  } else {
+    renderQuestion();
+    const v = d.votes || {};
+    for (const pl of [1, 2]) {
+      if (!v[pl]) continue;
+      if (mode === 'local' || pl === me) { votes[pl] = v[pl]; sealVote(pl); }
+      else remoteVote(v[pl], true);
+    }
+    if (votes[1] !== null && votes[2] !== null) {
+      if (d.revealed) { revealVotes(true); if (d.timer && document.getElementById('timer')) timerRestore(d.timer); }
+      else bothVoted();
+    }
+  }
+  saveSession();
+  wakeLock();
+  if (mode === 'online') { if (me === 1) hostUp(false); else guestUp(); scheduleRetry(); }
+}
+
+function leaveRoom() {
+  leaving = true;
+  const c = conn, p = peer;
+  try { if (c && c.open) c.send({ t: 'bye' }); } catch (e) {}
+  conn = null; peer = null;
+  setTimeout(() => { try { c && c.close(); } catch (e) {} try { p && p.destroy(); } catch (e) {} }, 300);
+  clearTimeout(joinTimeout); clearTimeout(retryTimer); clearInterval(hbTimer); hostStart = null;
+  timerStop(); clearTimeout(revealTimer);
+  clearSession(); wakeRelease();
+  linkOk = false; mode = 'local'; me = 1;
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  showMenu('home');
+}
+
+// Si el otro está más adelante (se perdió un "siguiente" mientras no había conexión), lo alcanzamos
+function jumpTo(q, sc) {
+  timerStop(); clearTimeout(revealTimer);
+  if (sc) score = sc;
+  cur = q; updateStats();
+  document.getElementById('qCard').hidden = false;
+  document.getElementById('endArea').innerHTML = '';
+  if (cur >= TOTAL) showEnd(true); else renderQuestion();
+}
+function mergeState(m) {
+  if (!inGame() || !Array.isArray(m.deck)) return;
+  if (JSON.stringify(m.deck) !== JSON.stringify(deckIdx)) {
+    if (me !== 2) return;                     // manda la partida del anfitrión
+    beginOnline(m.deck.map(Number).filter(i => QUESTIONS[i]));
+  }
+  if (m.q > cur) jumpTo(m.q, m.score);
+  if (m.q === cur && m.v && cur < TOTAL && votes[3 - me] === null && !revealed) remoteVote(m.v, true);
+  saveSession();
+}
+
+function onMsg(m) {
+  if (!m || typeof m !== 'object') return;
+  switch (m.t) {
+    case 'ping': send({ t: 'pong' }); break;
+    case 'pong': break;
+    case 'bye':
+      leaving = true; cleanupNet(); clearInterval(hbTimer); clearSession(); wakeRelease(); timerStop();
+      mode = 'local'; linkOk = false;
+      showMenu('error', { msg: 'La otra persona salió de la sala.' });
+      break;
+    case 'hello':                                   // el invitado llegó sin partida guardada
+      if (me !== 1) break;
+      if (Array.isArray(m.seen)) { m.seen.forEach(t => { if (typeof t === 'string') seen.add(t); }); saveSeen(); }
+      if (inGame()) send({ t: 'resume', deck: deckIdx, q: cur, v: votes[1] || null, score });
+      else if (hostStart) hostStart();
+      break;
+    case 'resume':                                  // el anfitrión me pasa la partida en curso
+      if (Array.isArray(m.deck)) {
+        if (!inGame() || JSON.stringify(m.deck) !== JSON.stringify(deckIdx)) beginOnline(m.deck.map(Number).filter(i => QUESTIONS[i]));
+        mergeState({ q: m.q, v: m.v, score: m.score, deck: m.deck });
+      }
+      break;
+    case 'state': mergeState(m); break;
+    case 'start':
+      if (Array.isArray(m.deck)) beginOnline(m.deck.map(Number).filter(i => QUESTIONS[i]));
+      break;
+    case 'vote':
+      if (m.q === cur) remoteVote(m.v);
+      else if (m.q > cur) pending[m.q] = m.v;
+      break;
+    case 'next':
+      if (m.to === cur + 1) { if (revealed) nextQuestion(true); else pendingNext = m.to; }
+      break;
+    case 'timer':
+      if (m.q === cur) timerApply(!!m.running, Number(m.left) || 0);
+      break;
+    case 'restart':
+      if (Array.isArray(m.deck)) {
+        document.getElementById('qCard').hidden = false;
+        document.getElementById('endArea').innerHTML = '';
+        sfx.start();
+        init(m.deck.map(Number).filter(i => QUESTIONS[i]));
+      }
+      break;
+  }
+}
+
+async function shareRoom() {
+  const url = roomUrl(roomCode), btn = document.getElementById('btnShare');
+  try {
+    if (navigator.share) { await navigator.share({ title: 'A Favor o En Contra', text: 'Entrá a mi sala (' + roomCode + ')', url }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  try {
+    await navigator.clipboard.writeText(url);
+    btn.innerHTML = '✓ Link copiado';
+    setTimeout(() => { if (btn) btn.innerHTML = '📤 Compartir link'; }, 2000);
+  } catch (e) { prompt('Copiá este link y pasaselo a tu pareja:', url); }
+}
+
+
+// Al bloquear la pantalla o cambiar de app NO se corta nada: solo se guarda el estado.
+addEventListener('pagehide', saveSession);
+addEventListener('pageshow', onVisible);
+addEventListener('online', () => { if (inGame() && !linkOk) scheduleRetry(true); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveSession(); else onVisible();
+});
+
+function boot() {
+  const c = new URLSearchParams(location.search).get('sala');
+  const link = c && /^[A-Za-z0-9]{4}$/.test(c) ? c.toUpperCase() : null;
+  const s = loadSession();
+  // Hay una partida guardada: se retoma (salvo que abran un link de otra sala)
+  if (s && (!link || (s.mode === 'online' && s.room === link))) { restoreSession(s); return; }
+  if (s) clearSession();
+  if (link) joinRoom(link); else showMenu('home');
+}
+boot();
+</script>
+</body>
+</html>
