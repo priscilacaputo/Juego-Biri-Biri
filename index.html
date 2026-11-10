@@ -928,12 +928,28 @@ let pending = {};           // votos del otro que llegaron antes de que yo llegu
 let pendingNext = null;
 let revealTimer = null;
 
-// Preguntas ya usadas en esta sesión, para no repetirlas al jugar otras 15
-let seen = new Set();
+// Preguntas ya vistas HOY (se guardan en este navegador y se olvidan al cambiar el día).
+// Se identifican por su texto, así agregar preguntas nuevas no rompe el historial.
+const SEEN_KEY = 'biri-seen';
+const today = () => new Date().toLocaleDateString('en-CA');   // YYYY-MM-DD, hora local
+function loadSeen() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SEEN_KEY) || 'null');
+    if (d && d.day === today() && Array.isArray(d.q)) return new Set(d.q);
+  } catch (e) {}
+  return new Set();
+}
+function saveSeen() {
+  try { localStorage.setItem(SEEN_KEY, JSON.stringify({ day: today(), q: [...seen] })); } catch (e) {}
+}
+let seen = loadSeen();
+let seenDay = today();
+function resetSeen() { seen = new Set(); saveSeen(); showMenu('home'); }
 
 function newDeckIdx() {
+  if (seenDay !== today()) { seen = new Set(); seenDay = today(); }   // cambió el día
   const all = [...QUESTIONS.keys()];
-  const pool = all.filter(i => !seen.has(i));
+  const pool = all.filter(i => !seen.has(QUESTIONS[i].text));
   let idx;
   if (pool.length >= TOTAL) {
     idx = shuffle(pool).slice(0, TOTAL);
@@ -942,9 +958,8 @@ function newDeckIdx() {
     idx = shuffle(pool);
     const rest = shuffle(all.filter(i => !idx.includes(i))).slice(0, TOTAL - idx.length);
     idx = idx.concat(rest);
-    seen = new Set();
+    seen = new Set(); saveSeen();   // se agotaron las de hoy: empieza un ciclo nuevo
   }
-  idx.forEach(i => seen.add(i));
   return idx;
 }
 
@@ -970,6 +985,7 @@ function updateStats() {
 
 function renderQuestion() {
   const q = deck[cur];
+  seen.add(q.text); saveSeen();
   document.getElementById('qIndex').textContent = `PREGUNTA ${cur + 1} / ${TOTAL}`;
   document.getElementById('qText').textContent  = q.text;
   document.getElementById('qTag').textContent   = q.cat;
@@ -1218,7 +1234,7 @@ const ICE = { iceServers: [
 ] };
 const PEER_OPTS = Object.assign({ config: ICE, debug: 0 }, window.PEER_OPTS || {});
 
-let peer = null, conn = null, roomCode = '', leaving = false, joinTimeout = null;
+let peer = null, conn = null, roomCode = '', leaving = false, joinTimeout = null, hostStart = null;
 
 const peerId  = c => 'biri-biri-' + c;
 const genCode = () => Array.from({ length: 4 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');
@@ -1234,6 +1250,7 @@ function showMenu(view, d = {}) {
   m.hidden = false;
   let html = '';
   if (view === 'home') {
+    if (seenDay === today()) { /* mantiene el contador al día */ } else { seen = new Set(); seenDay = today(); }
     html = `
       <div class="menu-card anim-slide">
         <div class="menu-logo">A Favor <span>o</span> En Contra</div>
@@ -1246,6 +1263,7 @@ function showMenu(view, d = {}) {
         </div>
         <div class="menu-or">o</div>
         <button class="btn-ghost wide" onclick="startLocal()">📱 Jugar en un solo celular</button>
+        ${seen.size ? `<button class="btn-link" onclick="resetSeen()">↺ Olvidar ${seen.size === 1 ? 'la pregunta vista' : 'las ' + seen.size + ' preguntas vistas'} hoy</button>` : ''}
       </div>`;
   } else if (view === 'host') {
     html = `
@@ -1281,7 +1299,7 @@ function showMenu(view, d = {}) {
 }
 
 function startLocal() {
-  mode = 'local'; me = 1; seen = new Set();
+  mode = 'local'; me = 1;
   document.getElementById('menu').hidden = true;
   document.getElementById('roomBar').hidden = true;
   document.getElementById('game').hidden = false;
@@ -1300,7 +1318,7 @@ function cleanupNet() {
   clearTimeout(joinTimeout);
   try { if (conn) conn.close(); } catch (e) {}
   try { if (peer) peer.destroy(); } catch (e) {}
-  conn = null; peer = null;
+  conn = null; peer = null; hostStart = null;
 }
 
 function netError(err) {
@@ -1325,14 +1343,21 @@ function wireConn(c) {
 function createRoom(tries = 0) {
   if (typeof Peer === 'undefined') { showMenu('error', { msg: 'No se pudo cargar el modo online.' }); return; }
   cleanupNet(); leaving = false;
-  me = 1; roomCode = genCode(); seen = new Set();
+  me = 1; roomCode = genCode();
   showMenu('busy', { text: 'Creando sala…' });
   peer = new Peer(peerId(roomCode), PEER_OPTS);
   peer.on('open', () => showMenu('host', { code: roomCode }));
   peer.on('connection', c => {
     if (conn && conn.open) { c.on('open', () => c.close()); return; }   // sala de 2: rechaza a un tercero
     conn = c; wireConn(c);
-    c.on('open', () => { const idx = freshDeck(); send({ t: 'start', deck: idx }); beginOnline(idx); });
+    // Antes de armar el mazo esperamos el historial de la otra persona (así no le salen preguntas que ya vio hoy)
+    let started = false, gotHello = false;
+    const go = () => {
+      if (started) return; started = true;
+      const idx = freshDeck(); send({ t: 'start', deck: idx }); beginOnline(idx);
+    };
+    hostStart = () => { gotHello = true; if (c.open) go(); };
+    c.on('open', () => { if (gotHello) go(); else setTimeout(go, 2500); });
   });
   peer.on('disconnected', () => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} });
   peer.on('error', err => {
@@ -1350,6 +1375,7 @@ function joinRoom(code) {
   peer.on('open', () => {
     conn = peer.connect(peerId(code), { reliable: true });
     wireConn(conn);
+    conn.on('open', () => send({ t: 'hello', seen: [...seen] }));
     joinTimeout = setTimeout(() => netError({ type: 'timeout' }), 15000);
   });
   peer.on('disconnected', () => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} });
@@ -1374,7 +1400,7 @@ function leaveRoom() {
   leaving = true;
   cleanupNet();
   timerStop(); clearTimeout(revealTimer);
-  mode = 'local'; me = 1; seen = new Set();
+  mode = 'local'; me = 1;
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
   showMenu('home');
 }
@@ -1382,6 +1408,10 @@ function leaveRoom() {
 function onMsg(m) {
   if (!m || typeof m !== 'object') return;
   switch (m.t) {
+    case 'hello':
+      if (Array.isArray(m.seen)) { m.seen.forEach(t => { if (typeof t === 'string') seen.add(t); }); saveSeen(); }
+      if (hostStart) hostStart();
+      break;
     case 'start':
       if (Array.isArray(m.deck)) beginOnline(m.deck.map(Number).filter(i => QUESTIONS[i]));
       break;
