@@ -850,6 +850,7 @@ function timerTick() {
     sfx.alarm();
     burst(['⏰', '🔔', '💬'], 10);
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    saveSession();
   } else if (sec !== tmr.lastSec) {
     tmr.lastSec = sec;
     if (sec <= 10) sfx.tick();
@@ -867,6 +868,7 @@ function timerApply(running, left) {
   tmr.left = left; tmr.running = running; tmr.lastSec = null;
   if (running) { sfx.start(); tmr.endAt = Date.now() + left; tmr.id = setInterval(timerTick, 200); }
   timerRender();
+  saveSession();
 }
 
 // Arranca solo al mostrarse el "¡A debatir!". No se sincroniza por red:
@@ -880,6 +882,7 @@ function timerAuto() {
     tmr.running = true;
     tmr.id = setInterval(timerTick, 200);
     timerRender();
+    saveSession();
   }, 1200);
 }
 
@@ -896,6 +899,7 @@ function timerToggle() {
   }
   timerRender();
   timerSend();
+  saveSession();
 }
 
 function timerReset() {
@@ -903,6 +907,7 @@ function timerReset() {
   tmr = { id: null, endAt: 0, left: DEBATE_MS, running: false, lastSec: null };
   timerRender();
   timerSend();
+  saveSession();
 }
 
 function shuffle(arr) {
@@ -927,6 +932,8 @@ let me = 1;                 // número de jugador propio en modo online
 let pending = {};           // votos del otro que llegaron antes de que yo llegue a esa pregunta
 let pendingNext = null;
 let revealTimer = null;
+let started = false;        // hay una partida en curso (local u online)
+let deckIdx = [];           // índices del mazo actual (se guarda y se sincroniza)
 
 // Preguntas ya vistas HOY (se guardan en este navegador y se olvidan al cambiar el día).
 // Se identifican por su texto, así agregar preguntas nuevas no rompe el historial.
@@ -968,7 +975,8 @@ function init(idx) {
   syncMute();
   clearTimeout(revealTimer);
   pending = {}; pendingNext = null;
-  deck = (idx || newDeckIdx()).map(i => QUESTIONS[i]);
+  deckIdx = idx || newDeckIdx();
+  deck = deckIdx.map(i => QUESTIONS[i]);
   cur = 0;
   votes = { 1: null, 2: null };
   score = { agree: 0, debate: 0 };
@@ -1029,6 +1037,7 @@ function renderQuestion() {
     const v = pending[cur]; delete pending[cur];
     remoteVote(v);
   }
+  saveSession();
 }
 
 function castVote(player, choice) {
@@ -1038,16 +1047,9 @@ function castVote(player, choice) {
   sfx.vote(player);
   if (mode === 'online') send({ t: 'vote', q: cur, v: choice });
 
-  const panel  = document.getElementById('panel' + player);
-  const btnsEl = document.getElementById('btns' + player);
-  const status = document.getElementById('status' + player);
-
-  panel.classList.add('ready-p' + player);
-  status.textContent = '✓ Voto registrado';
-
-  // Replace buttons with sealed display — hides choice until reveal
-  btnsEl.innerHTML =
-    `<div class="voted-display voted-display-${player}">🔒 Esperando al otro...</div>`;
+  // Los botones se reemplazan por un sello: el voto queda oculto hasta revelar
+  sealVote(player);
+  saveSession();
 
   if (votes[1] !== null && votes[2] !== null) bothVoted();
 }
@@ -1066,18 +1068,19 @@ function bothVoted() {
 }
 
 // El otro jugador votó (online). Solo guardamos el voto; se ve recién al revelar.
-function remoteVote(v) {
+function remoteVote(v, silent) {
   const other = 3 - me;
   if (votes[other] !== null || revealed) return;
   votes[other] = v;
   document.getElementById('panel' + other).classList.add('ready-p' + other);
   document.getElementById('status' + other).textContent = '✓ Ya votó';
   document.getElementById('btns' + other).innerHTML = '<div class="voted-display wait">🔒 Ya votó</div>';
-  sfx.vote(other);
+  if (silent !== true) sfx.vote(other);
+  saveSession();
   if (votes[1] !== null && votes[2] !== null) bothVoted();
 }
 
-function revealVotes() {
+function revealVotes(silent) {
   if (!votes[1] || !votes[2] || revealed) return;
   clearTimeout(revealTimer);
   revealed = true;
@@ -1089,8 +1092,7 @@ function revealVotes() {
   const v2 = votes[2];
   const agree = v1 === v2;
 
-  if (agree) score.agree++;
-  else       score.debate++;
+  if (silent !== true) { if (agree) score.agree++; else score.debate++; }   // al restaurar, el puntaje ya viene guardado
   updateStats();
 
   const icon    = agree ? '🤝' : '⚔️';
@@ -1126,9 +1128,12 @@ function revealVotes() {
     </div>`;
 
   document.getElementById('btnNext').hidden = false;
+  if (silent === true) { if (!agree) timerRender(); saveSession(); return; }   // restauración: sin sonidos ni efectos
   if (!agree) { timerRender(); timerAuto(); }
   agree ? sfx.agree() : sfx.debate();
   burst(agree ? ['🎉','✨','💚','🤝','⭐'] : ['⚡','🔥','💥','⚔️','🗯️'], agree ? 26 : 18);
+
+  saveSession();
 
   // El otro ya tocó "Siguiente" antes de que yo terminara de revelar
   if (pendingNext === cur + 1) { pendingNext = null; nextQuestion(true); }
@@ -1164,7 +1169,7 @@ function nextQuestion(fromRemote) {
   }
 }
 
-function showEnd() {
+function showEnd(silent) {
   document.getElementById('qCard').hidden    = true;
   document.getElementById('voteGrid').hidden = true;
   document.getElementById('revealWrap').hidden = true;
@@ -1180,8 +1185,7 @@ function showEnd() {
       : 'Mitad acuerdos, mitad debates. Balance perfecto.';
 
   timerStop();
-  sfx.end();
-  burst(['🏆','🎉','✨','⭐','🎊'], 36);
+  if (silent !== true) { sfx.end(); burst(['🏆','🎉','✨','⭐','🎊'], 36); }
   document.getElementById('endArea').innerHTML = `
     <div class="end-screen anim-pop">
       <div class="end-trophy">🏆</div>
@@ -1200,6 +1204,7 @@ function showEnd() {
       <div class="end-msg">${msg}</div>
       ${endButtons()}
     </div>`;
+  saveSession();
 }
 
 function endButtons() {
@@ -1222,6 +1227,61 @@ function restartGame() {
 }
 
 
+// ═══ SESIÓN PERSISTENTE: la partida sobrevive a bloquear la pantalla / recargar ═══
+// Solo termina al tocar "Salir" (o a las 6 h sin jugar).
+const SESSION_KEY = 'biri-session';
+const SESSION_TTL = 6 * 3600 * 1000;
+
+function saveSession() {
+  if (!started) return;
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({
+      ts: Date.now(), mode, me, room: roomCode, deck: deckIdx, cur, votes, revealed, score,
+      timer: { running: tmr.running, endAt: tmr.endAt, left: tmr.left }
+    }));
+  } catch (e) {}
+}
+function loadSession() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (d && Date.now() - d.ts < SESSION_TTL && Array.isArray(d.deck) && d.deck.length &&
+        d.deck.every(i => QUESTIONS[i])) return d;
+  } catch (e) {}
+  return null;
+}
+function clearSession() {
+  started = false;
+  try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+}
+
+// Mantiene la pantalla encendida mientras se juega (evita que se bloquee sola)
+let wl = null;
+async function wakeLock() {
+  try {
+    if (started && 'wakeLock' in navigator && document.visibilityState === 'visible' && !wl) {
+      wl = await navigator.wakeLock.request('screen');
+      wl.addEventListener('release', () => { wl = null; });
+    }
+  } catch (e) { wl = null; }
+}
+function wakeRelease() { try { if (wl) wl.release(); } catch (e) {} wl = null; }
+
+function sealVote(player) {
+  document.getElementById('panel' + player).classList.add('ready-p' + player);
+  document.getElementById('status' + player).textContent = '✓ Voto registrado';
+  document.getElementById('btns' + player).innerHTML =
+    `<div class="voted-display voted-display-${player}">🔒 Esperando al otro...</div>`;
+}
+
+function timerRestore(t) {
+  clearInterval(tmr.id); tmr.id = null;
+  const left = t.running ? t.endAt - Date.now() : t.left;
+  tmr.left = Math.max(0, left); tmr.running = false; tmr.lastSec = null;
+  if (t.running && left > 0) { tmr.running = true; tmr.endAt = t.endAt; tmr.id = setInterval(timerTick, 200); }
+  timerRender();
+  if (!t.running && t.left === DEBATE_MS) timerAuto();
+}
+
 // ═══════════════════════════════════════════════════════════
 //  MODO ONLINE (2 celulares) — WebRTC con PeerJS
 // ═══════════════════════════════════════════════════════════
@@ -1235,13 +1295,16 @@ const ICE = { iceServers: [
 const PEER_OPTS = Object.assign({ config: ICE, debug: 0 }, window.PEER_OPTS || {});
 
 let peer = null, conn = null, roomCode = '', leaving = false, joinTimeout = null, hostStart = null;
+let linkOk = false, lastRecv = 0, retryTimer = null, retryMs = 1500, hbTimer = null, attemptAt = 0;
 
 const peerId  = c => 'biri-biri-' + c;
 const genCode = () => Array.from({ length: 4 }, () => ALPHA[Math.floor(Math.random() * ALPHA.length)]).join('');
 const freshDeck = newDeckIdx;
 const roomUrl = c => location.origin + location.pathname + '?sala=' + c;
+const inGame = () => started && mode === 'online';
 
 function send(msg) { try { if (conn && conn.open) conn.send(msg); } catch (e) {} }
+function sendState() { send({ t: 'state', q: cur, v: votes[me] || null, score, deck: deckIdx }); }
 
 function showMenu(view, d = {}) {
   const m = document.getElementById('menu');
@@ -1298,13 +1361,15 @@ function showMenu(view, d = {}) {
   }
 }
 
+
 function startLocal() {
-  mode = 'local'; me = 1;
+  mode = 'local'; me = 1; started = true;
   document.getElementById('menu').hidden = true;
   document.getElementById('roomBar').hidden = true;
   document.getElementById('game').hidden = false;
   document.getElementById('qCard').hidden = false;
   document.getElementById('endArea').innerHTML = '';
+  wakeLock();
   init();
 }
 
@@ -1314,15 +1379,35 @@ function joinFromInput() {
   joinRoom(c);
 }
 
-function cleanupNet() {
-  clearTimeout(joinTimeout);
-  try { if (conn) conn.close(); } catch (e) {}
-  try { if (peer) peer.destroy(); } catch (e) {}
-  conn = null; peer = null; hostStart = null;
+
+// ── Conexión ──
+function killPeer() {
+  const c = conn, p = peer;
+  conn = null; peer = null;          // los eventos viejos se ignoran (c !== conn)
+  try { if (c) c.close(); } catch (e) {}
+  try { if (p) p.destroy(); } catch (e) {}
 }
+function cleanupNet() {
+  clearTimeout(joinTimeout); clearTimeout(retryTimer);
+  killPeer(); hostStart = null;
+}
+
+function renderBar() {
+  const bar = document.getElementById('roomBar');
+  if (!inGame()) { bar.hidden = true; return; }
+  const who = `Sos el <b style="color:var(--p${me})">Jugador ${me}</b>`;
+  bar.innerHTML = (linkOk
+    ? `🟢 Sala <b>${roomCode}</b> · ${who}`
+    : `🟡 ${me === 1 ? 'Esperando que vuelva tu pareja…' : 'Reconectando…'} <span style="opacity:.7">(tu partida sigue guardada)</span>`)
+    + ` · <button class="btn-link" onclick="leaveRoom()">Salir</button>`;
+  bar.hidden = false;
+}
+function linkUp()   { linkOk = true; lastRecv = Date.now(); retryMs = 1500; clearTimeout(retryTimer); renderBar(); }
+function linkDown() { if (linkOk) { linkOk = false; renderBar(); } }
 
 function netError(err) {
   if (leaving) return;
+  if (inGame()) { attemptAt = 0; linkDown(); scheduleRetry(); return; }   // en partida nunca se rinde
   const t = err && err.type;
   const msg =
     t === 'peer-unavailable' ? 'No encontramos esa sala. Revisá el código y que tu pareja siga con la pantalla abierta.' :
@@ -1335,83 +1420,236 @@ function netError(err) {
 }
 
 function wireConn(c) {
-  c.on('data', onMsg);
-  c.on('close', () => { if (!leaving) { cleanupNet(); showMenu('error', { msg: 'Se desconectó la otra persona.' }); } });
-  c.on('error', netError);
+  c.on('data', m => { lastRecv = Date.now(); onMsg(m); });
+  c.on('close', () => { if (c === conn) handleDrop(); });
+  c.on('error', e => { if (c === conn) handleDrop(e); });
+}
+function handleDrop(err) {
+  if (leaving) return;
+  if (inGame()) { linkDown(); scheduleRetry(); return; }
+  if (err) { netError(err); return; }
+  cleanupNet(); showMenu('error', { msg: 'Se desconectó la otra persona.' });
 }
 
-function createRoom(tries = 0) {
-  if (typeof Peer === 'undefined') { showMenu('error', { msg: 'No se pudo cargar el modo online.' }); return; }
-  cleanupNet(); leaving = false;
-  me = 1; roomCode = genCode();
-  showMenu('busy', { text: 'Creando sala…' });
+// Reintentos: sin límite mientras la partida siga abierta
+function scheduleRetry(now) {
+  if (leaving || !inGame()) return;
+  clearTimeout(retryTimer);
+  retryTimer = setTimeout(netRetry, now ? 0 : retryMs);
+  retryMs = Math.min(Math.round(retryMs * 1.5), 6000);
+}
+function netRetry() {
+  if (leaving || !inGame()) return;
+  if (conn && conn.open) { linkUp(); return; }
+  if (me === 1) {
+    // El anfitrión mantiene su sala y espera que el otro vuelva
+    if (!peer || peer.destroyed) hostUp(false);
+    else if (peer.disconnected) { try { peer.reconnect(); } catch (e) { hostUp(false); } }
+  } else if (!(peer && !peer.destroyed && conn && !conn.open && Date.now() - attemptAt < 12000)) {
+    guestUp();
+  }
+  scheduleRetry();
+}
+
+function hostUp(fresh, tries = 0) {
+  killPeer();
   peer = new Peer(peerId(roomCode), PEER_OPTS);
-  peer.on('open', () => showMenu('host', { code: roomCode }));
-  peer.on('connection', c => {
-    if (conn && conn.open) { c.on('open', () => c.close()); return; }   // sala de 2: rechaza a un tercero
-    conn = c; wireConn(c);
-    // Antes de armar el mazo esperamos el historial de la otra persona (así no le salen preguntas que ya vio hoy)
-    let started = false, gotHello = false;
-    const go = () => {
-      if (started) return; started = true;
-      const idx = freshDeck(); send({ t: 'start', deck: idx }); beginOnline(idx);
-    };
-    hostStart = () => { gotHello = true; if (c.open) go(); };
-    c.on('open', () => { if (gotHello) go(); else setTimeout(go, 2500); });
-  });
+  peer.on('open', () => { if (inGame()) renderBar(); else if (fresh) showMenu('host', { code: roomCode }); });
+  peer.on('connection', onHostConn);
   peer.on('disconnected', () => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} });
   peer.on('error', err => {
-    if (err.type === 'unavailable-id' && tries < 5) { createRoom(tries + 1); return; }   // código ocupado: probar otro
+    if (inGame()) { scheduleRetry(); return; }
+    if (err.type === 'unavailable-id' && fresh && tries < 5) { roomCode = genCode(); hostUp(true, tries + 1); return; }
     netError(err);
   });
 }
 
-function joinRoom(code) {
-  if (typeof Peer === 'undefined') { showMenu('error', { msg: 'No se pudo cargar el modo online.' }); return; }
-  cleanupNet(); leaving = false;
-  me = 2; roomCode = code;
-  showMenu('busy', { text: 'Conectando a la sala ' + code + '…' });
+function onHostConn(c) {
+  if (conn && conn.open) { c.on('open', () => c.close()); return; }   // sala de 2: rechaza a un tercero
+  conn = c; wireConn(c);
+  let started1 = false, gotHello = false;
+  const begin = () => {
+    if (started1) return; started1 = true;
+    const idx = freshDeck(); send({ t: 'start', deck: idx }); beginOnline(idx);
+  };
+  hostStart = () => { gotHello = true; if (c.open) begin(); };
+  c.on('open', () => {
+    if (inGame()) { linkUp(); sendState(); return; }          // la otra persona volvió a una partida en curso
+    // Lobby: esperamos su historial del día antes de armar el mazo
+    if (gotHello) begin(); else setTimeout(begin, 2500);
+  });
+}
+
+function guestUp() {
+  killPeer(); attemptAt = Date.now();
   peer = new Peer(PEER_OPTS);
   peer.on('open', () => {
-    conn = peer.connect(peerId(code), { reliable: true });
-    wireConn(conn);
-    conn.on('open', () => send({ t: 'hello', seen: [...seen] }));
-    joinTimeout = setTimeout(() => netError({ type: 'timeout' }), 15000);
+    const c = peer.connect(peerId(roomCode), { reliable: true });
+    conn = c; wireConn(c);
+    c.on('open', () => {
+      clearTimeout(joinTimeout);
+      if (inGame()) { linkUp(); sendState(); }
+      else send({ t: 'hello', seen: [...seen] });
+    });
+    clearTimeout(joinTimeout);
+    joinTimeout = setTimeout(() => {
+      if (c !== conn || c.open) return;
+      if (inGame()) { attemptAt = 0; scheduleRetry(); } else netError({ type: 'timeout' });
+    }, 15000);
   });
   peer.on('disconnected', () => { try { if (peer && !peer.destroyed) peer.reconnect(); } catch (e) {} });
-  peer.on('error', netError);
+  peer.on('error', err => {
+    if (inGame()) { attemptAt = 0; scheduleRetry(); return; }
+    netError(err);
+  });
+}
+
+function createRoom() {
+  if (typeof Peer === 'undefined') { showMenu('error', { msg: 'No se pudo cargar el modo online.' }); return; }
+  cleanupNet(); clearSession(); leaving = false;
+  me = 1; roomCode = genCode();
+  showMenu('busy', { text: 'Creando sala…' });
+  hostUp(true);
+}
+
+function joinRoom(code) {
+  if (typeof Peer === 'undefined') { showMenu('error', { msg: 'No se pudo cargar el modo online.' }); return; }
+  cleanupNet(); clearSession(); leaving = false;
+  me = 2; roomCode = code;
+  showMenu('busy', { text: 'Conectando a la sala ' + code + '…' });
+  guestUp();
 }
 
 function beginOnline(idx) {
   clearTimeout(joinTimeout);
-  mode = 'online';
+  mode = 'online'; started = true;
   document.getElementById('menu').hidden = true;
   document.getElementById('game').hidden = false;
   document.getElementById('qCard').hidden = false;
   document.getElementById('endArea').innerHTML = '';
-  const bar = document.getElementById('roomBar');
-  bar.innerHTML = `🟢 Sala <b>${roomCode}</b> · Sos el <b style="color:var(--p${me})">Jugador ${me}</b> · <button class="btn-link" onclick="leaveRoom()">Salir</button>`;
-  bar.hidden = false;
+  linkUp();
+  hbStart(); wakeLock();
   sfx.start();
   init(idx);
 }
 
+// Latido: detecta conexiones "zombi" (típico al volver de un bloqueo de pantalla)
+function hbStart() {
+  clearInterval(hbTimer);
+  let n = 0;
+  hbTimer = setInterval(() => {
+    if (!inGame() || leaving) return;
+    n++;
+    if (conn && conn.open) {
+      if (n % 2 === 0) send({ t: 'ping' });
+      if (document.visibilityState === 'visible' && Date.now() - lastRecv > 15000) {
+        const c = conn; conn = null; try { c.close(); } catch (e) {}
+        handleDrop();
+      }
+    }
+  }, 2000);
+}
+
+function onVisible() {
+  if (!started) return;
+  wakeLock();
+  if (!inGame()) return;
+  lastRecv = Math.min(lastRecv, Date.now() - 7000);   // si en ~8 s no llega nada, se reconecta
+  send({ t: 'ping' });
+  if (!linkOk) scheduleRetry(true);
+}
+
+function restoreSession(d) {
+  mode = d.mode === 'online' ? 'online' : 'local';
+  me = d.me === 2 ? 2 : 1; roomCode = d.room || '';
+  started = true; leaving = false;
+  deckIdx = d.deck; deck = deckIdx.map(i => QUESTIONS[i]);
+  cur = d.cur | 0; score = d.score || { agree: 0, debate: 0 };
+  document.getElementById('menu').hidden = true;
+  document.getElementById('game').hidden = false;
+  document.getElementById('qCard').hidden = false;
+  document.getElementById('endArea').innerHTML = '';
+  syncMute(); updateStats();
+  if (mode === 'online') { linkOk = false; renderBar(); hbStart(); }
+  else document.getElementById('roomBar').hidden = true;
+
+  if (cur >= TOTAL) {
+    showEnd(true);
+  } else {
+    renderQuestion();
+    const v = d.votes || {};
+    for (const pl of [1, 2]) {
+      if (!v[pl]) continue;
+      if (mode === 'local' || pl === me) { votes[pl] = v[pl]; sealVote(pl); }
+      else remoteVote(v[pl], true);
+    }
+    if (votes[1] !== null && votes[2] !== null) {
+      if (d.revealed) { revealVotes(true); if (d.timer && document.getElementById('timer')) timerRestore(d.timer); }
+      else bothVoted();
+    }
+  }
+  saveSession();
+  wakeLock();
+  if (mode === 'online') { if (me === 1) hostUp(false); else guestUp(); scheduleRetry(); }
+}
+
 function leaveRoom() {
   leaving = true;
-  cleanupNet();
+  const c = conn, p = peer;
+  try { if (c && c.open) c.send({ t: 'bye' }); } catch (e) {}
+  conn = null; peer = null;
+  setTimeout(() => { try { c && c.close(); } catch (e) {} try { p && p.destroy(); } catch (e) {} }, 300);
+  clearTimeout(joinTimeout); clearTimeout(retryTimer); clearInterval(hbTimer); hostStart = null;
   timerStop(); clearTimeout(revealTimer);
-  mode = 'local'; me = 1;
+  clearSession(); wakeRelease();
+  linkOk = false; mode = 'local'; me = 1;
   try { history.replaceState(null, '', location.pathname); } catch (e) {}
   showMenu('home');
+}
+
+// Si el otro está más adelante (se perdió un "siguiente" mientras no había conexión), lo alcanzamos
+function jumpTo(q, sc) {
+  timerStop(); clearTimeout(revealTimer);
+  if (sc) score = sc;
+  cur = q; updateStats();
+  document.getElementById('qCard').hidden = false;
+  document.getElementById('endArea').innerHTML = '';
+  if (cur >= TOTAL) showEnd(true); else renderQuestion();
+}
+function mergeState(m) {
+  if (!inGame() || !Array.isArray(m.deck)) return;
+  if (JSON.stringify(m.deck) !== JSON.stringify(deckIdx)) {
+    if (me !== 2) return;                     // manda la partida del anfitrión
+    beginOnline(m.deck.map(Number).filter(i => QUESTIONS[i]));
+  }
+  if (m.q > cur) jumpTo(m.q, m.score);
+  if (m.q === cur && m.v && cur < TOTAL && votes[3 - me] === null && !revealed) remoteVote(m.v, true);
+  saveSession();
 }
 
 function onMsg(m) {
   if (!m || typeof m !== 'object') return;
   switch (m.t) {
-    case 'hello':
-      if (Array.isArray(m.seen)) { m.seen.forEach(t => { if (typeof t === 'string') seen.add(t); }); saveSeen(); }
-      if (hostStart) hostStart();
+    case 'ping': send({ t: 'pong' }); break;
+    case 'pong': break;
+    case 'bye':
+      leaving = true; cleanupNet(); clearInterval(hbTimer); clearSession(); wakeRelease(); timerStop();
+      mode = 'local'; linkOk = false;
+      showMenu('error', { msg: 'La otra persona salió de la sala.' });
       break;
+    case 'hello':                                   // el invitado llegó sin partida guardada
+      if (me !== 1) break;
+      if (Array.isArray(m.seen)) { m.seen.forEach(t => { if (typeof t === 'string') seen.add(t); }); saveSeen(); }
+      if (inGame()) send({ t: 'resume', deck: deckIdx, q: cur, v: votes[1] || null, score });
+      else if (hostStart) hostStart();
+      break;
+    case 'resume':                                  // el anfitrión me pasa la partida en curso
+      if (Array.isArray(m.deck)) {
+        if (!inGame() || JSON.stringify(m.deck) !== JSON.stringify(deckIdx)) beginOnline(m.deck.map(Number).filter(i => QUESTIONS[i]));
+        mergeState({ q: m.q, v: m.v, score: m.score, deck: m.deck });
+      }
+      break;
+    case 'state': mergeState(m); break;
     case 'start':
       if (Array.isArray(m.deck)) beginOnline(m.deck.map(Number).filter(i => QUESTIONS[i]));
       break;
@@ -1448,12 +1686,23 @@ async function shareRoom() {
   } catch (e) { prompt('Copiá este link y pasaselo a tu pareja:', url); }
 }
 
-addEventListener('pagehide', () => { leaving = true; cleanupNet(); });
+
+// Al bloquear la pantalla o cambiar de app NO se corta nada: solo se guarda el estado.
+addEventListener('pagehide', saveSession);
+addEventListener('pageshow', onVisible);
+addEventListener('online', () => { if (inGame() && !linkOk) scheduleRetry(true); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveSession(); else onVisible();
+});
 
 function boot() {
   const c = new URLSearchParams(location.search).get('sala');
-  if (c && /^[A-Za-z0-9]{4}$/.test(c)) joinRoom(c.toUpperCase());
-  else showMenu('home');
+  const link = c && /^[A-Za-z0-9]{4}$/.test(c) ? c.toUpperCase() : null;
+  const s = loadSession();
+  // Hay una partida guardada: se retoma (salvo que abran un link de otra sala)
+  if (s && (!link || (s.mode === 'online' && s.room === link))) { restoreSession(s); return; }
+  if (s) clearSession();
+  if (link) joinRoom(link); else showMenu('home');
 }
 boot();
 </script>
